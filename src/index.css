@@ -118,10 +118,11 @@ label.field { display: flex; flex-direction: column; gap: 4px; font-size: 0.9rem
 
 .promo-overlay { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 20; }
 .promo-box { display: flex; gap: 8px; background: var(--panel); padding: 10px; border-radius: 10px; }
-.promo-btn { width: 72px; height: 72px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); cursor: pointer; padding: 4px; }
-.promo-btn:hover { border-color: var(--accent); }
+.promo-btn { width: clamp(56px, 12vw, 92px); aspect-ratio: 1; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); cursor: pointer; padding: 6px; }
+.promo-btn:hover { border-color: var(--accent); background: #353a46; }
 .promo-piece { position: relative; width: 100%; height: 100%; }
-.promo-piece piece { position: absolute; inset: 0; width: 100%; height: 100%; background-size: cover; }
+/* Must out-rank chessground's `.cg-wrap piece { width: 12.5% }`, which loads after this file. */
+.cg-wrap.promo-piece piece { position: absolute; inset: 0; width: 100%; height: 100%; transform: none; background-size: contain; background-repeat: no-repeat; background-position: center; }
 
 /* ---------- eval bar ---------- */
 .eval-bar { width: 26px; background: #3a3d44; border-radius: 4px; position: relative; overflow: hidden; display: flex; flex-direction: column-reverse; }
