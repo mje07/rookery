@@ -2,9 +2,13 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/svg+xml" href="%BASE_URL%favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>chess</title>
+    <title>Rookery</title>
+    <!-- Adds COOP/COEP via a service worker on static hosts so Stockfish can use multiple threads.
+         No-op where the server already sends the headers (vite dev/preview) or the browser can't use it. -->
+    <script>window.coi = { quiet: true };</script>
+    <script src="%BASE_URL%coi-serviceworker.js"></script>
   </head>
   <body>
     <div id="root"></div>

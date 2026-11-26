@@ -4,7 +4,7 @@ import { analysisEngine } from '../engine/EngineService';
 import type { AnalysisResult } from '../engine/types';
 
 /** Continuously analyse `fen` while enabled; restarts on position change. */
-export function useLiveEngine(fen: string, enabled: boolean, multiPV = 3, maxDepth = 22) {
+export function useLiveEngine(fen: string, enabled: boolean, multiPV = 3, maxDepth = 30) {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   useEffect(() => {
     setResult(null);

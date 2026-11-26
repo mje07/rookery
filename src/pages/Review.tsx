@@ -11,11 +11,13 @@ import { winPctFor } from '../chess/evalMath';
 import { loadBook } from '../features/openings/book';
 import { analyzeGame, ALL_CLASSES } from '../features/review/analyzeGame';
 import { CLASS_META, KEY_CLASSES } from '../features/review/classMeta';
+import { ClassIcon } from '../features/review/ClassIcon';
+import { classBadgeSvg } from '../features/review/classIcons';
 import { deleteGame, pgnSummary, saveGame } from '../features/review/gameLibrary';
 import type { PlyReview, ReviewData } from '../features/review/types';
-import { useSettings } from '../lib/settings';
+import { REVIEW_NODES, useSettings } from '../lib/settings';
 import { NavBar, PageHeader, PlayerStrip } from '../components/ui';
-import { ArrowLeft, BookmarkPlus, Microscope, RotateCcw, Trash2, Upload } from 'lucide-react';
+import { ArrowLeft, BookmarkPlus, ChevronLeft, ChevronRight, Microscope, Play, RotateCcw, Trash2, Upload, X } from 'lucide-react';
 import { bankGameMistakes } from '../features/mistakes/bank';
 import { markDone } from '../features/path/daily';
 import { playMoveSound } from '../lib/sound';
@@ -161,10 +163,15 @@ type RetryState = { ply: PlyReview; status: 'waiting' | 'checking' | 'right' | '
 
 function ReviewGame({ id }: { id: number }) {
   const navigate = useNavigate();
-  const depth = useSettings((s) => s.reviewDepth);
+  const quality = useSettings((s) => s.reviewQuality);
+  const budget = REVIEW_NODES[quality];
   const settingsLoaded = useSettings((s) => s.loaded);
   const [game, setGame] = useState<GameRecord | null | undefined>(undefined);
   const [review, setReview] = useState<ReviewData | null>(null);
+  /** Moves analysed so far, while the full review is still running. */
+  const [partial, setPartial] = useState<ReviewData | null>(null);
+  /** Stepping through an engine line on the board: SAN moves from `fen`, showing the first `step`. */
+  const [line, setLine] = useState<{ fen: string; sans: string[]; step: number; label: string } | null>(null);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [error, setError] = useState('');
   const [index, setIndex] = useState(0);
@@ -202,7 +209,8 @@ function ReviewGame({ id }: { id: number }) {
     async (force = false) => {
       if (!tree || !settingsLoaded) return;
       const cached = await db.reviews.get(id);
-      if (cached && !force && cached.depth >= depth) {
+      // Older depth-based reviews (no `nodes`) are kept until the user re-runs them.
+      if (cached && !force && (cached.nodes === undefined || cached.nodes >= budget)) {
         setReview(cached.data);
         return;
       }
@@ -210,22 +218,27 @@ function ReviewGame({ id }: { id: number }) {
       const ctrl = new AbortController();
       runRef.current = ctrl;
       setReview(null);
+      setPartial(null);
       setError('');
       try {
         const book = await loadBook();
+        const started = performance.now();
         const data = await analyzeGame(tree, analysisEngine(), book, {
-          depth,
+          nodes: budget,
           signal: ctrl.signal,
           onProgress: setProgress,
+          onPartial: setPartial,
         });
-        await db.reviews.put({ gameId: id, depth, createdAt: Date.now(), data });
+        await db.reviews.put({ gameId: id, depth: 0, nodes: budget, createdAt: Date.now(), data });
+        console.info(`Review: ${data.plies.length} moves in ${((performance.now() - started) / 1000).toFixed(1)}s`);
         setReview(data);
+        setPartial(null);
         setProgress(null);
       } catch (e) {
         if ((e as Error).name !== 'AbortError') setError(String(e));
       }
     },
-    [tree, id, depth, settingsLoaded],
+    [tree, id, budget, settingsLoaded],
   );
 
   useEffect(() => {
@@ -239,12 +252,21 @@ function ReviewGame({ id }: { id: number }) {
   const total = positions.length - 1;
   const go = useCallback((i: number) => {
     setRetry(null);
+    setLine(null);
     setIndex(Math.max(0, Math.min(total, i)));
   }, [total]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement).tagName === 'TEXTAREA') return;
+      if (line) {
+        if (e.key === 'ArrowLeft') setLine({ ...line, step: Math.max(0, line.step - 1) });
+        else if (e.key === 'ArrowRight') setLine({ ...line, step: Math.min(line.sans.length, line.step + 1) });
+        else if (e.key === 'Escape') setLine(null);
+        else return;
+        e.preventDefault();
+        return;
+      }
       if (e.key === 'ArrowLeft') go(index - 1);
       else if (e.key === 'ArrowRight') go(index + 1);
       else if (e.key === 'Home') go(0);
@@ -254,15 +276,16 @@ function ReviewGame({ id }: { id: number }) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [go, index, total]);
+  }, [go, index, total, line]);
 
   if (game === undefined) return <div className="page-loading">Loading…</div>;
   if (game === null) return <div className="empty">Game not found.</div>;
 
-  const ply = review && index > 0 ? review.plies[index - 1] : null;
-  const keyMoments = review ? review.plies.filter((p) => KEY_CLASSES.includes(p.classification)) : [];
+  const shown = review ?? partial;
+  const ply = shown && index > 0 ? shown.plies[index - 1] ?? null : null;
+  const keyMoments = shown ? shown.plies.filter((p) => KEY_CLASSES.includes(p.classification)) : [];
   const nextKey = (dir: 1 | -1) => {
-    if (!review) return;
+    if (!shown) return;
     const list = dir === 1 ? keyMoments.filter((p) => p.ply > index) : keyMoments.filter((p) => p.ply < index).reverse();
     if (list[0]) go(list[0].ply);
   };
@@ -271,18 +294,28 @@ function ReviewGame({ id }: { id: number }) {
   let boardFen = positions[index];
   let lastMove = ply?.uci;
   let shapes = [] as ReturnType<typeof arrow>[];
-  let badge: { square: string; color: string; glyph: string } | undefined;
-  if (retry) {
+  let badge: { square: string; svg: string } | undefined;
+  if (line) {
+    const c = new Chess(line.fen);
+    let last: string | undefined;
+    for (const san of line.sans.slice(0, line.step)) {
+      const m = c.move(san);
+      last = m.from + m.to + (m.promotion ?? '');
+    }
+    boardFen = c.fen();
+    lastMove = last;
+  } else if (retry) {
     boardFen = retry.fen;
     lastMove = undefined;
   } else if (ply) {
-    const meta = CLASS_META[ply.classification];
-    badge = { square: ply.uci.slice(2, 4), color: meta.color, glyph: meta.glyph };
+    badge = { square: ply.uci.slice(2, 4), svg: classBadgeSvg(ply.classification) };
     if (showBest && ply.bestUci && ply.bestUci !== ply.uci && !['book', 'best', 'brilliant', 'great'].includes(ply.classification)) {
       shapes = [arrow(ply.bestUci, 'green')];
     }
   }
-  const evalScore = retry ? undefined : review ? (index === 0 ? review.plies[0]?.evalBefore : ply?.evalAfter) : undefined;
+  const evalScore = retry || line ? undefined : shown ? (index === 0 ? shown.plies[0]?.evalBefore : ply?.evalAfter) : undefined;
+  const openLine = (fen: string, sans: string[], label: string) => setLine({ fen, sans, step: 1, label });
+  const engineThreads = analysisEngine().getInfo()?.threads ?? 1;
 
   const startRetry = (p: PlyReview) => {
     setIndex(p.ply);
@@ -300,7 +333,7 @@ function ReviewGame({ id }: { id: number }) {
       return setRetry((r) => r && { ...r, status: 'right' });
     }
     // Judge alternatives by the engine: within the "excellent" band counts.
-    const r = await analysisEngine().analyze(chess.fen(), { depth: Math.min(depth, 14) });
+    const r = await analysisEngine().analyze(chess.fen(), { nodes: 300_000 });
     const after = chess.isCheckmate() ? { mate: retry.ply.color === 'w' ? 1 : -1 } : r.lines[0]?.score ?? { cp: 0 };
     const loss = retry.ply.winBefore - winPctFor(after, retry.ply.color);
     if (loss <= 2) playMoveSound('success');
@@ -338,7 +371,7 @@ function ReviewGame({ id }: { id: number }) {
       <div className="side-col">
         {!review && (
           <div className="panel">
-            <h2>Analysing your game…</h2>
+            <h2 style={{ marginBottom: 8 }}>Analysing your game…</h2>
             {error ? (
               <div className="error">{error}</div>
             ) : (
@@ -347,23 +380,25 @@ function ReviewGame({ id }: { id: number }) {
                   <div style={{ width: `${progress ? (progress.done / progress.total) * 100 : 0}%` }} />
                 </div>
                 <div className="muted small" style={{ marginTop: 6 }}>
-                  {progress ? `${progress.done} / ${progress.total} positions · depth ${depth}` : 'Starting engine…'}
+                  {progress
+                    ? `${progress.done} / ${progress.total} positions · ${quality} quality${engineThreads > 1 ? ` · ${engineThreads} threads` : ''}. Results appear as they’re ready.`
+                    : 'Starting engine…'}
                 </div>
               </>
             )}
           </div>
         )}
 
-        {review && (
+        {shown && (
           <>
-            <Summary review={review} white={game.white} black={game.black} />
+            <Summary review={shown} white={game.white} black={game.black} />
             {banked !== null && (
               <div className="feedback ok">
                 <BookmarkPlus size={18} />
                 <span>{banked ? `${banked} of your mistakes were added to the mistake trainer.` : 'No mistakes to add. Clean game!'}</span>
               </div>
             )}
-            {banked === null && !game.mistakesBanked && game.source !== 'bot' && (
+            {review && banked === null && !game.mistakesBanked && game.source !== 'bot' && (
               <div className="panel small">
                 <div className="btn-row" style={{ justifyContent: 'space-between' }}>
                   <span className="muted">Practise your mistakes from this game. Which side were you?</span>
@@ -375,9 +410,27 @@ function ReviewGame({ id }: { id: number }) {
               </div>
             )}
             <div className="panel">
-              <CoachBox ply={ply} retry={retry} review={review} onRetry={startRetry} />
+              {line ? (
+                <LineViewer line={line} onStep={(step) => setLine({ ...line, step })} onClose={() => setLine(null)} />
+              ) : (
+                <CoachBox ply={ply} retry={retry} review={shown} onRetry={startRetry} />
+              )}
+              {!line && !retry && ply && (
+                <div className="btn-row" style={{ marginTop: 10 }}>
+                  {ply.bestSan && ply.bestUci !== ply.uci && ply.bestLine.length > 0 && (
+                    <button className="btn small" onClick={() => openLine(ply.fenBefore, ply.bestLine, `Instead of ${ply.san}`)}>
+                      <Play size={14} /> Show {ply.bestSan} line
+                    </button>
+                  )}
+                  {ply.replyLine.length > 0 && (
+                    <button className="btn small ghost" onClick={() => openLine(ply.fenAfter, ply.replyLine, 'Engine line from here')}>
+                      <Play size={14} /> Engine line from here
+                    </button>
+                  )}
+                </div>
+              )}
               <div className="btn-row" style={{ marginTop: 10 }}>
-                {retry ? (
+                {line ? null : retry ? (
                   <>
                     {retry.status !== 'waiting' && retry.status !== 'checking' && (
                       <button className="btn" onClick={() => startRetry(retry.ply)}>Try again</button>
@@ -396,14 +449,14 @@ function ReviewGame({ id }: { id: number }) {
               </div>
             </div>
             <EvalGraph
-              whiteWins={review.whiteWins}
+              whiteWins={shown.whiteWins}
               current={index}
               onSelect={go}
-              marks={review.plies
+              marks={shown.plies
                 .filter((p) => ['blunder', 'mistake', 'miss', 'brilliant', 'great'].includes(p.classification))
                 .map((p) => ({ index: p.ply, color: CLASS_META[p.classification].color }))}
             />
-            <MoveTable review={review} index={index} onSelect={go} />
+            <MoveTable review={shown} index={index} onSelect={go} />
           </>
         )}
 
@@ -422,6 +475,46 @@ function ReviewGame({ id }: { id: number }) {
           <button className="btn ghost small" onClick={() => navigate('/review')}><ArrowLeft size={15} /> All games</button>
           {review && <button className="btn ghost small" onClick={() => void run(true)}><RotateCcw size={15} /> Re-run analysis</button>}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** Step through an engine line on the board. */
+function LineViewer({
+  line,
+  onStep,
+  onClose,
+}: {
+  line: { fen: string; sans: string[]; step: number; label: string };
+  onStep: (step: number) => void;
+  onClose: () => void;
+}) {
+  const startNo = parseInt(line.fen.split(' ')[5] ?? '1', 10) || 1;
+  const blackFirst = line.fen.split(' ')[1] === 'b';
+  return (
+    <div>
+      <div className="btn-row" style={{ justifyContent: 'space-between' }}>
+        <div className="coach-title">{line.label}</div>
+        <button className="btn small ghost" onClick={onClose} title="Back to the game (Esc)"><X size={15} /></button>
+      </div>
+      <div className="line-moves">
+        {line.sans.map((san, i) => {
+          const ply = i + (blackFirst ? 1 : 0);
+          const num = startNo + Math.floor(ply / 2);
+          const label = ply % 2 === 0 ? `${num}.` : i === 0 ? `${num}…` : '';
+          return (
+            <span key={i}>
+              {label && <span className="mv-num">{label}</span>}
+              <span className={`mv ${i + 1 === line.step ? 'active' : ''}`} onClick={() => onStep(i + 1)}>{san}</span>{' '}
+            </span>
+          );
+        })}
+      </div>
+      <div className="btn-row" style={{ marginTop: 8 }}>
+        <button className="btn small" onClick={() => onStep(Math.max(0, line.step - 1))} disabled={line.step === 0}><ChevronLeft size={15} /></button>
+        <button className="btn small" onClick={() => onStep(Math.min(line.sans.length, line.step + 1))} disabled={line.step >= line.sans.length}><ChevronRight size={15} /></button>
+        <span className="muted small">← → to step · Esc to return</span>
       </div>
     </div>
   );
@@ -455,7 +548,7 @@ function Summary({ review, white, black }: { review: ReviewData; white: string; 
             <div key={c} style={{ display: 'contents' }}>
               <div className={`num ${w ? '' : 'zero'}`}>{w}</div>
               <div className="lbl" style={{ opacity: dim ? 0.45 : 1 }}>
-                <span className="class-dot" style={{ background: m.color }}>{m.glyph}</span> {m.label}
+                <ClassIcon cls={c} size={18} /> {m.label}
               </div>
               <div className={`num ${b ? '' : 'zero'}`}>{b}</div>
             </div>
@@ -512,7 +605,7 @@ function CoachBox({
   const canRetry = ['inaccuracy', 'mistake', 'miss', 'blunder'].includes(ply.classification);
   return (
     <div className="coach-box">
-      <span className="class-dot" style={{ background: m.color }}>{m.glyph}</span>
+      <ClassIcon cls={ply.classification} size={34} />
       <div style={{ flex: 1 }}>
         <div className="coach-title">
           {moveNumberLabel(ply.fenBefore)} {ply.san} is {/^[aeiou]/i.test(m.label) ? 'an' : 'a'} {m.label.toLowerCase()} move
@@ -543,9 +636,7 @@ function MoveTable({ review, index, onSelect }: { review: ReviewData; index: num
             {r.map((p, j) =>
               p ? (
                 <div key={j} className={`cell ${index === p.ply ? 'active' : ''}`} onClick={() => onSelect(p.ply)}>
-                  <span className="class-dot" style={{ background: CLASS_META[p.classification].color, width: 16, height: 16, fontSize: 8 }}>
-                    {CLASS_META[p.classification].glyph}
-                  </span>
+                  <ClassIcon cls={p.classification} size={16} />
                   {p.san}
                 </div>
               ) : (

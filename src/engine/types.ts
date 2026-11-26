@@ -19,6 +19,9 @@ export interface AnalysisResult {
   bestMove: string | null;
   /** Lines ordered by multipv rank (index 0 = best). */
   lines: PvLine[];
+  /** Search speed and total nodes, when reported. */
+  nps?: number;
+  nodes?: number;
 }
 
 export interface AnalyzeOptions {

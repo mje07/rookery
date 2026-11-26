@@ -13,7 +13,6 @@ export function EngineLines({ fen, result, onPlayLine }: Props) {
   if (!result || !result.lines.length) return <div className="engine-lines muted small">Thinking…</div>;
   return (
     <div className="engine-lines">
-      <div className="muted small">Depth {result.depth}</div>
       {result.lines.map((l) => {
         const san = uciLineToSan(fen, l.pv.slice(0, 12));
         return (

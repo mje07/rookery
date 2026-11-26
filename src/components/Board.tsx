@@ -22,22 +22,13 @@ export interface BoardProps {
   shapes?: DrawShape[];
   /** CSS classes per square, e.g. { e4: 'sq-hint' }. */
   highlights?: Record<string, string>;
-  /** Show a coloured badge on a square (move classification). */
-  badge?: { square: string; color: string; glyph: string };
+  /** SVG badge drawn on a square (chessground customSvg space: square = 100×100, origin top-left). */
+  badge?: { square: string; svg: string };
   sound?: boolean;
 }
 
 const PROMO_PIECES = ['q', 'n', 'r', 'b'] as const;
 const PIECE_NAME = { q: 'queen', n: 'knight', r: 'rook', b: 'bishop' } as const;
-
-function badgeSvg(color: string, glyph: string) {
-  // Origin is the square's top-left corner; 100 units = one square. Badge sits on the top-right corner.
-  return `<g transform="translate(68 -2) scale(0.34)">
-    <circle cx="50" cy="50" r="48" fill="${color}" stroke="#fff" stroke-width="6"/>
-    <text x="50" y="50" text-anchor="middle" dominant-baseline="central" font-family="system-ui,sans-serif"
-      font-weight="800" font-size="${glyph.length > 1 ? 46 : 58}" fill="#fff">${glyph}</text>
-  </g>`;
-}
 
 export function Board({
   fen,
@@ -63,6 +54,8 @@ export function Board({
     if (!el.current) return;
     api.current = Chessground(el.current, {
       animation: { enabled: true, duration: 180 },
+      // Rank numbers are drawn on the left edge; chessground needs to know so it tags their square colours correctly.
+      ranksPosition: 'left',
       highlight: { lastMove: true, check: true },
       movable: {
         free: false,
@@ -115,7 +108,7 @@ export function Board({
 
   useEffect(() => {
     const all: DrawShape[] = [...shapes];
-    if (badge) all.push({ orig: badge.square as Key, customSvg: { html: badgeSvg(badge.color, badge.glyph) } });
+    if (badge) all.push({ orig: badge.square as Key, customSvg: { html: badge.svg } });
     api.current?.setAutoShapes(all);
   }, [shapes, badge]);
 

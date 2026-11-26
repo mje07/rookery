@@ -28,3 +28,5 @@ public/engine
 # Large source data downloads
 data-src
 smoke-out
+
+public/coi-serviceworker.js

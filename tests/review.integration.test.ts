@@ -9,7 +9,14 @@ afterAll(() => engine.quit());
 
 describe('full game review with real Stockfish', () => {
   it('reviews the Opera Game sensibly', async () => {
-    const review = await analyzeGame(treeFromPgn(OPERA_GAME), engine, loadBookFromDisk(), { depth: 12 });
+    const partials: number[] = [];
+    const review = await analyzeGame(treeFromPgn(OPERA_GAME), engine, loadBookFromDisk(), {
+      depth: 12,
+      onPartial: (r) => partials.push(r.plies.length),
+    });
+    // Partial reviews stream in, growing one move at a time, before the final result.
+    expect(partials.length).toBeGreaterThan(20);
+    expect(partials.every((n, i) => i === 0 || n > partials[i - 1])).toBe(true);
     const by = (san: string) => review.plies.find((p) => p.san === san)!;
     console.log(
       review.plies.map((p) => `${p.san}:${p.classification}`).join(' '),

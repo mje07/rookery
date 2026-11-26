@@ -1,10 +1,10 @@
 import { Fragment, useEffect, useRef } from 'react';
 import { isWhiteMove, moveNumberLabel, type MoveTree } from '../chess/tree';
+import { ClassIcon } from '../features/review/ClassIcon';
+import type { Classification } from '../features/review/types';
 
 export interface MoveMark {
-  glyph: string;
-  color: string;
-  title?: string;
+  cls: Classification;
 }
 
 interface Props {
@@ -42,9 +42,7 @@ export function MoveList({ tree, currentId, onSelect, marks, onContext }: Props)
         >
           {n.san}
           {mark && (
-            <span className="mv-mark" style={{ background: mark.color }} title={mark.title}>
-              {mark.glyph}
-            </span>
+            <span className="mv-mark"><ClassIcon cls={mark.cls} size={14} /></span>
           )}
         </span>
         {n.comment && <span className="mv-comment">{n.comment}</span>}

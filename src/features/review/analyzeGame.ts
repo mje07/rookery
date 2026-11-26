@@ -43,7 +43,16 @@ export async function analyzeGame(
   tree: MoveTree,
   engine: ReviewEngine,
   book: OpeningBook,
-  opts: { depth: number; onProgress?: (p: AnalyzeProgress) => void; signal?: AbortSignal },
+  opts: {
+    /** Node budget per position (preferred: even quality, predictable time). */
+    nodes?: number;
+    /** Fixed depth per position (used by tests / when no node budget is given). */
+    depth?: number;
+    onProgress?: (p: AnalyzeProgress) => void;
+    /** Called with a review of the moves analysed so far, after each position. */
+    onPartial?: (r: ReviewData) => void;
+    signal?: AbortSignal;
+  },
 ): Promise<ReviewData> {
   const nodes = mainline(tree);
   const results: AnalysisResult[] = [];
@@ -55,17 +64,26 @@ export async function analyzeGame(
     results.push(
       terminal
         ? { fen, depth: 0, bestMove: null, lines: [] }
-        : await engine.analyze(fen, { depth: opts.depth, multiPV: 2, signal: opts.signal }),
+        : await engine.analyze(fen, {
+            nodes: opts.nodes,
+            depth: opts.nodes ? undefined : opts.depth ?? 14,
+            multiPV: 2,
+            signal: opts.signal,
+          }),
     );
     opts.onProgress?.({ done: i + 1, total: nodes.length });
+    if (opts.onPartial && i >= 1 && i < nodes.length - 1) opts.onPartial(buildReview(tree, results, book));
   }
   if (opts.signal?.aborted) throw new DOMException('aborted', 'AbortError');
   return buildReview(tree, results, book);
 }
 
-/** Pure part: turn per-position engine results into a review. Exported for tests. */
+/**
+ * Pure part: turn per-position engine results into a review. Exported for tests.
+ * `results` may cover only a prefix of the game (partial review while analysis is running).
+ */
 export function buildReview(tree: MoveTree, results: AnalysisResult[], book: OpeningBook): ReviewData {
-  const nodes = mainline(tree);
+  const nodes = mainline(tree).slice(0, Math.max(1, results.length));
   const scores = nodes.map((n, i) => positionScore(n.fen, results[i]));
   const plies: PlyReview[] = [];
   const counts = { w: emptyCounts(), b: emptyCounts() };
@@ -81,13 +99,18 @@ export function buildReview(tree: MoveTree, results: AnalysisResult[], book: Ope
     stillBook = stillBook && book.inBook(node.fen);
     const prev = plies[plies.length - 1];
 
+    // Score of the played move: if the search of the position before already evaluated it (it's one of the
+    // MultiPV lines), use that — same search, so no depth noise between "best" and "played".
+    const sameSearch = rBefore.lines.find((l) => l.pv[0] === node.uci)?.score;
+    const afterScore = terminalScore(node.fen) ?? sameSearch ?? scores[i];
+
     const c = classifyMove({
       fenBefore: before.fen,
       uci: node.uci,
       bestScore: scores[i - 1],
       secondScore: rBefore.lines[1]?.score,
       bestUci: rBefore.bestMove,
-      afterScore: scores[i],
+      afterScore,
       inBook: stillBook,
       prevOpponentLoss: prev ? Math.max(0, prev.winBefore - prev.winAfter) : undefined,
       winBeforeOpponentMove: prev ? 100 - prev.winBefore : undefined,
@@ -103,7 +126,7 @@ export function buildReview(tree: MoveTree, results: AnalysisResult[], book: Ope
       fenBefore: before.fen,
       fenAfter: node.fen,
       evalBefore: scores[i - 1],
-      evalAfter: scores[i],
+      evalAfter: afterScore,
       bestUci: rBefore.bestMove,
       bestSan: bestLine[0] ?? null,
       bestLine,

@@ -1,6 +1,7 @@
 import { Chess, type Square, type PieceSymbol } from 'chess.js';
 import type { Score } from '../../engine/types';
 import { winPctFor } from '../../chess/evalMath';
+import { captureGain } from '../../chess/see';
 import type { Classification } from './types';
 
 export const PIECE_VALUE: Record<PieceSymbol, number> = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
@@ -83,24 +84,10 @@ export function classifyMove(input: ClassifyInput): ClassifyResult {
   return res('blunder');
 }
 
-/** Attackers of `sq` belonging to `by`, as square list. */
-function attackers(chess: Chess, sq: Square, by: 'w' | 'b'): Square[] {
-  return chess.attackers(sq, by);
-}
-
-function lowestAttackerValue(chess: Chess, sq: Square, by: 'w' | 'b'): number {
-  let min = Infinity;
-  for (const a of attackers(chess, sq, by)) {
-    const p = chess.get(a);
-    if (p) min = Math.min(min, p.type === 'k' ? 100 : PIECE_VALUE[p.type]);
-  }
-  return min;
-}
-
 /**
- * Heuristic piece sacrifice: after the move, a piece of the mover worth ≥ 3 (the moved one, or one it
- * leaves behind) can be taken for a net material loss — attacked and undefended, or attacked by a
- * cheaper piece — and the move itself didn't capture something of at least that value.
+ * Piece sacrifice: after the move, some piece of the mover worth ≥ 3 (the moved piece, or one it leaves exposed)
+ * can be won by the opponent per static exchange evaluation, for a net loss of ≥ 2 after accounting for anything the
+ * move itself captured — and that wasn't already true before the move.
  */
 export function isSacrifice(fenBefore: string, uci: string): boolean {
   const chess = new Chess(fenBefore);
@@ -112,33 +99,18 @@ export function isSacrifice(fenBefore: string, uci: string): boolean {
   } catch {
     return false;
   }
-  const captured = move.captured ? PIECE_VALUE[move.captured] : 0;
   if (chess.isCheckmate()) return false;
-  const board = chess.board();
-  for (const row of board) {
+  const captured = move.captured ? PIECE_VALUE[move.captured] : 0;
+  const before = new Chess(fenBefore);
+  for (const row of chess.board()) {
     for (const p of row) {
-      if (!p || p.color !== mover || p.type === 'k' || p.type === 'p') continue;
-      const value = PIECE_VALUE[p.type];
-      if (value < 3) continue;
-      const atk = lowestAttackerValue(chess, p.square, opp);
-      // Not attacked, or only the king attacks a defended piece: it can't be won.
-      if (atk === Infinity || (atk === 100 && attackers(chess, p.square, mover).length > 0)) continue;
-      const defended = attackers(chess, p.square, mover).length > 0;
-      const hanging = !defended || atk < value;
-      if (!hanging) continue;
-      // Material actually given up: what they win minus what we took this move.
-      const net = (defended ? value - atk : value) - captured;
-      if (net >= 2) {
-        // If the piece was already hanging before the move, the move didn't sacrifice it.
-        const before = new Chess(fenBefore);
-        const stillThere = p.square !== move.to && before.get(p.square)?.type === p.type;
-        if (stillThere) {
-          const bAtk = lowestAttackerValue(before, p.square, opp);
-          const bDef = attackers(before, p.square, mover).length > 0;
-          if (bAtk !== Infinity && (!bDef || bAtk < value)) continue;
-        }
-        return true;
-      }
+      if (!p || p.color !== mover || p.type === 'k' || PIECE_VALUE[p.type] < 3) continue;
+      const lost = captureGain(chess, p.square, opp);
+      if (lost - captured < 2) continue;
+      // Already en prise before this move (same piece, same square)? Then the move didn't sacrifice it.
+      const unmoved = p.square !== move.to && before.get(p.square)?.type === p.type;
+      if (unmoved && captureGain(before, p.square, opp) >= lost) continue;
+      return true;
     }
   }
   return false;

@@ -15,6 +15,7 @@ import { analysisEngine } from '../engine/EngineService';
 import { winPctFor } from '../chess/evalMath';
 import { playMoveSound } from '../lib/sound';
 import { CLASS_META } from '../features/review/classMeta';
+import { ClassIcon } from '../features/review/ClassIcon';
 import type { Classification } from '../features/review/types';
 
 export default function Train() {
@@ -296,7 +297,7 @@ function GameMistake({
         {sidebar}
         <div className="panel">
           <div className="coach-box">
-            {meta && <span className="class-dot" style={{ background: meta.color }}>{meta.glyph}</span>}
+            {meta && <ClassIcon cls={card.classification as Classification} size={34} />}
             <div>
               <div className="coach-title">From one of your games</div>
               <div className="small muted">

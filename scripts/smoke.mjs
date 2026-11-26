@@ -20,7 +20,10 @@ const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
 const errors = [];
 page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
-page.on('console', (m) => m.type() === 'error' && errors.push(`console: ${m.text()}`));
+page.on('console', (m) => {
+  if (m.type() === 'error') errors.push(`console: ${m.text()}`);
+  if (m.text().startsWith('Review:')) console.log(m.text());
+});
 page.on('request', (r) => { const u = new URL(r.url()); if (!['localhost', '127.0.0.1'].includes(u.hostname) && !u.protocol.startsWith('data') && !u.protocol.startsWith('blob')) errors.push(`external request: ${r.url()}`); });
 const shot = (name) => page.screenshot({ path: join(out, `${name}.png`) });
 const steps = (process.env.STEPS ?? 'home,analysis,review').split(',');
@@ -53,8 +56,18 @@ if (steps.includes('analysis')) {
   const board = await page.locator('cg-board').boundingBox();
   const sq = (file, rank) => ({ x: board.x + (file + 0.5) * (board.width / 8), y: board.y + (8 - rank + 0.5) * (board.height / 8) });
   for (const [f, r] of [[4, 2], [4, 4]]) await page.mouse.click(sq(f, r).x, sq(f, r).y);
-  await page.waitForTimeout(1500);
+  await page.waitForTimeout(2500);
+  console.log('crossOriginIsolated:', await page.evaluate(() => crossOriginIsolated), '| status:', await page.locator('.side-col .muted.small').last().innerText());
   await shot('analysis');
+  // Threat mode (X) and black orientation (coordinates must stay readable).
+  await page.keyboard.press('x');
+  await page.waitForSelector('text=Threat:');
+  await page.waitForTimeout(1500);
+  await shot('analysis-threat');
+  await page.keyboard.press('x');
+  await page.click('button[aria-label="Flip board"]');
+  await page.waitForTimeout(600);
+  await shot('analysis-flipped');
 }
 
 if (steps.includes('review')) {
@@ -62,10 +75,22 @@ if (steps.includes('review')) {
   await page.fill('textarea', OPERA);
   await page.click('button:has-text("Review")');
   await page.waitForSelector('.review-summary', { timeout: 120000 });
+  await shot('review-streaming');
+  await page.waitForSelector('button:has-text("Re-run analysis")', { timeout: 180000 });
   await shot('review-summary');
   for (let i = 0; i < 31; i++) await page.keyboard.press('ArrowRight'); // to 16.Qb8+
   await page.waitForTimeout(500);
   await shot('review-qb8');
+  await page.keyboard.press('ArrowLeft'); // 15...Nxd7 (a black move) to try the line viewer if offered
+  for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowLeft');
+  const lineBtn = page.locator('button:has-text("line")').first();
+  if (await lineBtn.count()) {
+    await lineBtn.click();
+    await page.keyboard.press('ArrowRight');
+    await page.waitForTimeout(300);
+    await shot('review-line');
+    await page.keyboard.press('Escape');
+  }
   await page.click('button:has-text("Key moment")');
   await page.waitForTimeout(300);
   await page.keyboard.press('Home');
@@ -93,6 +118,7 @@ async function clickMove(from, to) {
 if (steps.includes('play')) {
   await page.goto(`${base}/#/play`);
   await page.click('button.card:has-text("Pip")');
+  await page.selectOption('select >> nth=0', 'white');
   await page.click('button:has-text("Play Pip")');
   await page.waitForSelector('cg-board');
   await clickMove('e2', 'e4');

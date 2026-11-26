@@ -41,7 +41,7 @@ export function createNodeEngine(): ReviewEngine & { quit(): void } {
           }
         };
         engine.processCommand(`position fen ${fen}`);
-        engine.processCommand(`go depth ${opts.depth ?? 10}`);
+        engine.processCommand(opts.nodes ? `go nodes ${opts.nodes}` : `go depth ${opts.depth ?? 10}`);
       });
     });
     chain = job.catch(() => {});

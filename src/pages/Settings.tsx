@@ -2,7 +2,18 @@ import { useEffect, useState } from 'react';
 import { GoalForm } from '../features/path/GoalForm';
 import { loadProfile, saveProfile, type Profile } from '../features/path/profile';
 import { db } from '../db/db';
-import { useSettings, type BoardTheme } from '../lib/settings';
+import { REVIEW_NODES, useSettings, type BoardTheme } from '../lib/settings';
+import { analysisEngine } from '../engine/EngineService';
+
+function engineStatus(): string {
+  const isolated = typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated;
+  const info = analysisEngine().getInfo();
+  const cores = navigator.hardwareConcurrency || 1;
+  if (!isolated) return 'Running single-threaded (this browser or page doesn’t allow shared memory).';
+  return info
+    ? `Running on ${info.threads} thread${info.threads > 1 ? 's' : ''}, ${info.hashMb} MB hash.`
+    : `Will use up to ${Math.max(1, Math.min(cores - 1, 8))} threads.`;
+}
 import { PageHeader } from '../components/ui';
 
 const THEMES: { id: BoardTheme; label: string; light: string; dark: string }[] = [
@@ -58,7 +69,7 @@ export default function Settings() {
 
   return (
     <div style={{ maxWidth: 720, display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <PageHeader title="Settings" subtitle="Board appearance, analysis depth and your local data." />
+      <PageHeader title="Settings" subtitle="Your goal, board, engine and your local data." />
       <div className="panel">
         <h3>Board</h3>
         <div className="btn-row">
@@ -69,7 +80,7 @@ export default function Settings() {
               style={{ borderColor: s.boardTheme === t.id ? 'var(--accent)' : undefined, display: 'flex', gap: 8, alignItems: 'center' }}
               onClick={() => s.update({ boardTheme: t.id })}
             >
-              <span style={{ width: 28, height: 28, borderRadius: 4, background: `conic-gradient(${t.light} 90deg, ${t.dark} 90deg 180deg, ${t.light} 180deg 270deg, ${t.dark} 270deg)`, backgroundSize: '50% 50%' }} />
+              <span style={{ width: 28, height: 28, borderRadius: 4, background: `conic-gradient(${t.dark} 90deg, ${t.light} 90deg 180deg, ${t.dark} 180deg 270deg, ${t.light} 270deg)`, backgroundSize: '50% 50%' }} />
               {t.label}
             </button>
           ))}
@@ -107,13 +118,42 @@ export default function Settings() {
         </div>
       </div>
       <div className="panel">
-        <h3>Game Review</h3>
-        <label className="field" style={{ maxWidth: 320 }}>
-          Engine depth: {s.reviewDepth}
-          <input type="range" min={10} max={20} value={s.reviewDepth} onChange={(e) => s.update({ reviewDepth: Number(e.target.value) })} />
-        </label>
-        <div className="muted small" style={{ marginTop: 6 }}>
-          Higher is more accurate but slower. 14 takes roughly 20–60 seconds for a typical game.
+        <h3>Engine</h3>
+        <div className="tabs" style={{ marginBottom: 8 }}>
+          {(
+            [
+              ['fast', 'Fast (1.7 MB)'],
+              ['strong', 'Strong (94 MB download)'],
+            ] as const
+          ).map(([id, label]) => (
+            <button key={id} className={`tab ${s.engine === id ? 'active' : ''}`} onClick={() => s.update({ engine: id })}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="muted small">
+          Both are Stockfish 19. “Strong” uses the full neural network: noticeably more accurate on deep tactics, but it
+          downloads once (~94 MB, then cached) and searches more slowly. {engineStatus()}
+        </div>
+      </div>
+      <div className="panel">
+        <h3>Game Review quality</h3>
+        <div className="tabs" style={{ marginBottom: 8 }}>
+          {(
+            [
+              ['quick', 'Quick'],
+              ['standard', 'Standard'],
+              ['deep', 'Deep'],
+            ] as const
+          ).map(([id, label]) => (
+            <button key={id} className={`tab ${s.reviewQuality === id ? 'active' : ''}`} onClick={() => s.update({ reviewQuality: id })}>
+              {label} · {Math.round(REVIEW_NODES[id] / 1000)}k nodes
+            </button>
+          ))}
+        </div>
+        <div className="muted small">
+          How hard the engine looks at each position. Standard suits most games; Deep is best for sharp tactical games.
+          Existing reviews are kept; use “Re-run analysis” on a game to redo it at the new quality.
         </div>
       </div>
       <div className="panel">

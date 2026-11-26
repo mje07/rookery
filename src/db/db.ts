@@ -20,7 +20,10 @@ export interface GameRecord {
 
 export interface ReviewRecord {
   gameId: number;
+  /** Legacy (depth-based reviews); 0 for node-budget reviews. */
   depth: number;
+  /** Nodes searched per position. */
+  nodes?: number;
   createdAt: number;
   data: ReviewData;
 }

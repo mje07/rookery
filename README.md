@@ -55,12 +55,27 @@ goal; the roadmap is the slice of the curriculum between the two. Change either 
 
 | Area | What it does |
 | --- | --- |
-| **Game Review** | Paste/upload PGN (multi-game files OK). Every position is analysed (MultiPV 2); each move is classified (Brilliant · Great · Best · Excellent · Good · Book · Inaccuracy · Mistake · Miss · Blunder) from expected-points loss, with accuracy per side, a rough rating estimate, explanations, eval graph, key-moment navigation and "retry this move". |
+| **Game Review** | Paste/upload PGN (multi-game files OK). Every position is analysed with a fixed node budget (Quick / Standard / Deep) and MultiPV 2; each move is classified (Brilliant · Great · Best · Excellent · Good · Book · Inaccuracy · Mistake · Miss · Blunder) from expected-points loss, with accuracy per side, a rough rating estimate, explanations, eval graph, key-moment navigation, "retry this move", and steppable engine lines. Results stream in while the analysis runs. |
 | **Puzzles** | Rated (Glicko-2), 43 themes, Rush (3 min / 3 strikes), Survival, history. |
 | **Lessons** | 23 interactive lessons: basics, tactics, mating patterns, endgames played out against the engine, openings, strategy. |
 | **Openings** | Explorer over ~3,900 named lines; repertoire builder; spaced-repetition (SM-2) trainer with due reviews and line drills. |
 | **Play** | Nine bots (~250 to full strength), optional clocks, hint/takeback; finished games go straight to review. |
-| **Analysis** | Live MultiPV engine, variations, PGN/FEN import/export. |
+| **Analysis** | Live engine with 1–5 lines and an arrow per line, **threat mode** (X: what would the opponent play if it were their move?), depth/speed/thread status, variations, PGN/FEN import/export. |
+
+## Engine
+
+Stockfish 19 (WebAssembly) runs in a Web Worker. When the page is **cross-origin isolated** it uses the
+multi-threaded build with up to 8 threads (≈5 M nodes/s on an 8-core machine vs ≈0.6 M single-threaded):
+
+- `vite dev` / `vite preview` send the COOP/COEP headers themselves (`vite.config.ts`).
+- On static hosts that can't set headers (GitHub Pages), `public/coi-serviceworker.js` (MIT, copied from the
+  `coi-serviceworker` package at install) adds them; the first visit reloads once.
+- Without isolation (service workers disabled), it falls back to the single-threaded build automatically.
+
+Settings → Engine offers **Fast** (lite network, 1.7 MB) or **Strong** (full network, ~94 MB, downloaded once and
+cached). Move classification uses a static exchange evaluation (`src/chess/see.ts`) to decide whether a move really
+gives up material (for "Brilliant"), and scores the played move from the same search as the best move whenever the
+engine already looked at it, to avoid depth noise.
 
 ## Development
 
