@@ -7,10 +7,10 @@ import { DEFAULT_RATING, updateRating, type Rating } from './glicko';
 export async function recordAttempt(puzzle: Puzzle, mode: string, solved: boolean, userRatingAfter = 0) {
   await db.puzzleAttempts.add({
     puzzleId: puzzle.id,
-    mode,
+    mode: mode || 'train-focus',
     solved,
     rating: puzzle.rating,
-    userRatingAfter,
+    userRatingAfter: Number.isFinite(userRatingAfter) ? userRatingAfter : 0,
     at: Date.now(),
     themes: puzzle.themes,
   });
@@ -19,7 +19,9 @@ export async function recordAttempt(puzzle: Puzzle, mode: string, solved: boolea
 
 /** Update the user's puzzle rating for a rated attempt and log it. Returns the new rating. */
 export async function recordRatedAttempt(puzzle: Puzzle, mode: string, solved: boolean): Promise<{ before: Rating; after: Rating }> {
-  const before = await getSetting('puzzleRating', DEFAULT_RATING);
+  const stored = await getSetting('puzzleRating', DEFAULT_RATING);
+  // Never let a corrupted rating propagate (NaN would poison every later update).
+  const before = [stored.r, stored.rd, stored.vol].every(Number.isFinite) ? stored : DEFAULT_RATING;
   const after = updateRating(before, { r: puzzle.rating, rd: 80 }, solved ? 1 : 0);
   await setSetting('puzzleRating', after);
   await recordAttempt(puzzle, mode, solved, after.r);

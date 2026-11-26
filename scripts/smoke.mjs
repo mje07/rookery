@@ -242,6 +242,47 @@ if (steps.includes('train')) {
   await shot('train-mistakes');
 }
 
+if (steps.includes('regress')) {
+  // Regression: stage-goal puzzle links used to start a set with "NaN" remaining, which then broke the plan.
+  await ensureProfile();
+  await page.locator('.req', { hasText: 'Puzzles:' }).first().click();
+  await page.waitForSelector('button:has-text("Solution")', { timeout: 20000 });
+  const text = await page.locator('.side-col').first().innerText();
+  if (/NaN/.test(text)) throw new Error('puzzle set shows NaN: ' + text.slice(0, 120));
+  for (let i = 0; i < 12; i++) {
+    if (await page.locator('text=Set complete').count()) break;
+    await page.waitForSelector('button:has-text("Solution"), button:has-text("Next puzzle")', { timeout: 20000 });
+    if (await page.locator('button:has-text("Solution")').count()) await page.click('button:has-text("Solution")');
+    await page.waitForSelector('button:has-text("Next puzzle")', { timeout: 20000 });
+    await page.click('button:has-text("Next puzzle")');
+    await page.waitForTimeout(250);
+  }
+  await page.waitForSelector('text=Set complete', { timeout: 10000 });
+  await shot('regress-set-done');
+  await page.goto(`${base}/#/`);
+  await page.waitForSelector('.plan-item', { timeout: 15000 });
+
+  // Old bad data (an attempt with no mode) must not break the plan either.
+  await page.evaluate(
+    () =>
+      new Promise((resolve, reject) => {
+        const req = indexedDB.open('rookery');
+        req.onsuccess = () => {
+          const tx = req.result.transaction('puzzleAttempts', 'readwrite');
+          tx.objectStore('puzzleAttempts').add({ puzzleId: 'bad', solved: true, rating: 800, userRatingAfter: NaN, at: Date.now(), themes: ['fork'] });
+          tx.oncomplete = () => { req.result.close(); resolve(null); };
+          tx.onerror = () => reject(tx.error);
+        };
+        req.onerror = () => reject(req.error);
+      }),
+  );
+  await page.reload();
+  await page.waitForSelector('.plan-item', { timeout: 15000 });
+  if (await page.locator('text=Couldn’t load your plan').count()) throw new Error('plan failed to load with old data');
+  await shot('regress-plan-ok');
+  console.log('regress: stage-goal puzzle set and plan reload OK');
+}
+
 if (steps.includes('goal')) {
   // A club player's roadmap: change the goal via the Edit form and check the range updates.
   await ensureProfile();
@@ -254,7 +295,7 @@ if (steps.includes('goal')) {
   await shot('goal-club');
 }
 
-for (const s of steps.filter((x) => !['home', 'analysis', 'review', 'play', 'puzzles', 'lessons', 'openings', 'train', 'goal'].includes(x))) {
+for (const s of steps.filter((x) => !['home', 'analysis', 'review', 'play', 'puzzles', 'lessons', 'openings', 'train', 'goal', 'regress'].includes(x))) {
   await page.goto(`${base}/#/${s}`);
   await page.waitForTimeout(1500);
   await shot(s.replace(/\//g, '_'));

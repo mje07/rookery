@@ -57,6 +57,7 @@ export default function Home() {
   const [open, setOpen] = useState<string | null>(null);
   const [profile, setProfile] = useState<Profile | null | undefined>(undefined);
   const [editing, setEditing] = useState(false);
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
     void loadProfile().then(setProfile);
@@ -65,30 +66,37 @@ export default function Home() {
   useEffect(() => {
     if (!loaded || !profile) return;
     void (async () => {
-      const snapshot = await loadSnapshot();
-      const { stages, current, complete } = evaluateStages(snapshot, profile);
-      const [log, due, total, st] = await Promise.all([
-        db.dailyLog.get(today()),
-        db.mistakes.where('due').belowOrEqual(Date.now()).count(),
-        db.mistakes.count(),
-        streak(),
-      ]);
-      const todays = todaysBotGames(snapshot)[0];
-      const todaysGameReviewed = todays ? !!(await db.reviews.get(todays.id!)) : false;
-      const plan = buildPlan({ snapshot, current, minutes: dailyMinutes, log, dueMistakes: due, todaysGameReviewed });
-      const fresh = snapshot.attempts.length === 0 && snapshot.lessonsDone.size === 0 && snapshot.botGames.length === 0;
-      setD({
-        profile,
-        stages,
-        current,
-        complete,
-        strength: estimateStrength(snapshot, current, profile),
-        plan,
-        streak: st,
-        dueMistakes: due,
-        totalMistakes: total,
-        fresh,
-      });
+      try {
+        setLoadError('');
+        const snapshot = await loadSnapshot();
+        const { stages, current, complete } = evaluateStages(snapshot, profile);
+        const [log, due, total, st] = await Promise.all([
+          db.dailyLog.get(today()),
+          db.mistakes.where('due').belowOrEqual(Date.now()).count(),
+          db.mistakes.count(),
+          streak(),
+        ]);
+        const todays = todaysBotGames(snapshot)[0];
+        const todaysGameReviewed = todays ? !!(await db.reviews.get(todays.id!)) : false;
+        const plan = buildPlan({ snapshot, current, minutes: dailyMinutes, log, dueMistakes: due, todaysGameReviewed });
+        const fresh = snapshot.attempts.length === 0 && snapshot.lessonsDone.size === 0 && snapshot.botGames.length === 0;
+        setD({
+          profile,
+          stages,
+          current,
+          complete,
+          strength: estimateStrength(snapshot, current, profile),
+          plan,
+          streak: st,
+          dueMistakes: due,
+          totalMistakes: total,
+          fresh,
+        });
+      } catch (e) {
+        // Never leave the plan spinning forever: show what went wrong.
+        console.error('Failed to build today’s plan', e);
+        setLoadError((e as Error)?.message ?? String(e));
+      }
     })();
   }, [dailyMinutes, loaded, profile]);
 
@@ -116,6 +124,16 @@ export default function Home() {
         <section className="panel">
           <GoalForm onSubmit={save} />
         </section>
+      </div>
+    );
+  }
+  if (loadError) {
+    return (
+      <div className="panel" style={{ maxWidth: 640 }}>
+        <h2>Couldn’t load your plan</h2>
+        <p className="muted small">Your data is safe. This is a bug in the app. Reloading usually helps; if it keeps happening, please report this message:</p>
+        <pre className="small" style={{ whiteSpace: 'pre-wrap', color: '#ff8f8a' }}>{loadError}</pre>
+        <button className="btn primary" onClick={() => location.reload()}>Reload</button>
       </div>
     );
   }

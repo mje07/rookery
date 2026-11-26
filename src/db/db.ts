@@ -137,6 +137,18 @@ class RookeryDB extends Dexie {
       mistakes: '++id, &key, due, source',
       dailyLog: 'date',
     });
+    // v3: repair puzzle attempts recorded without a mode (from stage-goal links before the fix).
+    this.version(3)
+      .stores({})
+      .upgrade((tx) =>
+        tx
+          .table('puzzleAttempts')
+          .toCollection()
+          .modify((a: PuzzleAttempt) => {
+            if (typeof a.mode !== 'string' || !a.mode) a.mode = 'train-focus';
+            if (!Number.isFinite(a.userRatingAfter)) a.userRatingAfter = 0;
+          }),
+      );
   }
 }
 

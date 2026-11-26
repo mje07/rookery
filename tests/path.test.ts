@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { GameRecord, PuzzleAttempt } from '../src/db/db';
 import { DEFAULT_RATING } from '../src/features/puzzles/glicko';
 import { estimateStrength, evaluate, evaluateStages, userWon, type Snapshot } from '../src/features/path/progress';
-import { buildPlan } from '../src/features/path/daily';
+import { buildPlan, normaliseSpec, type PuzzleSetSpec } from '../src/features/path/daily';
 import { MAX_RATING, pathStages, STAGES } from '../src/features/path/stages';
 
 const P = { start: 200, goal: 1000 };
@@ -128,6 +128,44 @@ describe('stages and strength', () => {
     expect(stages[0].stage.id).toBe('rook-endgames');
     expect(current.stage.id).toBe('rook-endgames');
     expect(estimateStrength(snap(), current, p)).toBeGreaterThanOrEqual(1100);
+  });
+});
+
+describe('puzzle-set links (regression: "NaN puzzles remaining")', () => {
+  const complete = (spec: unknown) => {
+    const s = spec as PuzzleSetSpec;
+    expect(Array.isArray(s.themes) && s.themes.length > 0).toBe(true);
+    expect(Number.isFinite(s.count) && s.count > 0).toBe(true);
+    expect(Number.isFinite(s.ratingOffset)).toBe(true);
+    expect(typeof s.mode).toBe('string');
+  };
+  it('every stage-goal puzzle link carries a complete spec', () => {
+    for (const st of STAGES) {
+      for (const r of st.requirements) {
+        if (r.kind !== 'puzzles') continue;
+        const status = evaluate(r, snap());
+        expect(status.link).toBe('/train/puzzles');
+        complete(status.linkState);
+      }
+    }
+  });
+  it('every plan puzzle task carries a complete spec', () => {
+    const s = snap();
+    for (const [start, goal] of [[200, 1000], [1200, 1800], [1800, 2200]]) {
+      const { current } = evaluateStages(s, { start, goal });
+      const plan = buildPlan({ snapshot: s, current, minutes: 40, log: undefined, dueMistakes: 0, todaysGameReviewed: false });
+      for (const t of plan.filter((x) => x.link === '/train/puzzles')) complete(t.linkState);
+    }
+  });
+  it('normaliseSpec fills gaps from partial or missing navigation state', () => {
+    for (const state of [null, undefined, {}, { themes: ['fork'] }, { themes: ['pin'], minRating: 800 }, { count: NaN, ratingOffset: 'x' }]) {
+      complete(normaliseSpec(state));
+    }
+    expect(normaliseSpec({ themes: ['pin'], minRating: 800 })).toMatchObject({ themes: ['pin'], minRating: 800, count: 10 });
+  });
+  it('snapshot tolerates attempts saved without a mode', () => {
+    const bad = { ...attempt(['fork'], true), mode: undefined as unknown as string };
+    expect(() => evaluateStages(snap({ attempts: [bad] }), P)).not.toThrow();
   });
 });
 

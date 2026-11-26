@@ -4,6 +4,7 @@ import { BOTS } from '../play/bots';
 import { lessonById } from '../../content/lessons';
 import { THEME_NAMES } from '../puzzles/data';
 import { pathStages, STAGES, type Requirement, type Stage } from './stages';
+import type { PuzzleSetSpec } from './daily';
 import type { Profile } from './profile';
 
 export interface Snapshot {
@@ -38,7 +39,7 @@ export async function loadSnapshot(): Promise<Snapshot> {
     lessonsDone: new Set(progress.filter((p) => p.completed).map((p) => p.lessonId)),
     attempts,
     puzzleRating,
-    ratedCount: attempts.filter((a) => a.mode === 'rated' || a.mode.startsWith('train')).length,
+    ratedCount: attempts.filter((a) => a.mode === 'rated' || (typeof a.mode === 'string' && a.mode.startsWith('train'))).length,
     botGames,
     blunderCounts,
     rushBest,
@@ -87,8 +88,14 @@ export function evaluate(req: Requirement, s: Snapshot): ReqStatus {
         progress: Math.min(1, solved / req.solved) * (accOk ? 1 : 0.9),
         label: `Puzzles: ${req.label}`,
         detail: parts.join(' · '),
-        link: `/train/focus`,
-        linkState: { themes: req.themes, minRating: req.minRating },
+        link: '/train/puzzles',
+        linkState: {
+          themes: req.themes,
+          count: 10,
+          ratingOffset: 0,
+          minRating: req.minRating,
+          mode: 'train-focus',
+        } satisfies PuzzleSetSpec,
       };
     }
     case 'beatBot': {

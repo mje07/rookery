@@ -36,6 +36,24 @@ export interface GameSpec {
   tc: string;
 }
 
+const DEFAULT_SPEC: PuzzleSetSpec = { themes: ['fork', 'pin', 'hangingPiece', 'mateIn1'], count: 10, ratingOffset: 0, mode: 'train-focus' };
+
+/** Accept whatever navigation state arrived (possibly partial, or none after a reload) and fill in defaults. */
+export function normaliseSpec(state: unknown): PuzzleSetSpec {
+  const s = (state && typeof state === 'object' ? state : {}) as Partial<PuzzleSetSpec>;
+  const num = (v: unknown, d: number) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
+  return {
+    ...DEFAULT_SPEC,
+    ...s,
+    themes: Array.isArray(s.themes) && s.themes.length ? s.themes : DEFAULT_SPEC.themes,
+    count: Math.max(1, Math.round(num(s.count, DEFAULT_SPEC.count))),
+    ratingOffset: num(s.ratingOffset, DEFAULT_SPEC.ratingOffset),
+    minRating: s.minRating === undefined ? undefined : num(s.minRating, 0),
+    provisionalCap: s.provisionalCap === undefined ? undefined : num(s.provisionalCap, 0) || undefined,
+    mode: typeof s.mode === 'string' && s.mode ? s.mode : DEFAULT_SPEC.mode,
+  };
+}
+
 export const DAILY_OPTIONS = [20, 40, 60] as const;
 
 function sizes(minutes: number) {

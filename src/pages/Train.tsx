@@ -9,7 +9,7 @@ import { themedPuzzleNear, type Puzzle } from '../features/puzzles/data';
 import { PuzzlePlayer } from '../features/puzzles/PuzzlePlayer';
 import { recordRatedAttempt } from '../features/puzzles/record';
 import { dueMistakes, gradeMistake } from '../features/mistakes/bank';
-import { markDone, type PuzzleSetSpec } from '../features/path/daily';
+import { markDone, normaliseSpec } from '../features/path/daily';
 import { themeLabel } from '../features/path/progress';
 import { analysisEngine } from '../engine/EngineService';
 import { winPctFor } from '../chess/evalMath';
@@ -45,15 +45,11 @@ function Results({ results }: { results: boolean[] }) {
 
 /* ------------------------------------------------------------------ themed puzzle set */
 
+
 function PuzzleSetRunner() {
   const location = useLocation();
   const navigate = useNavigate();
-  const spec = (location.state as PuzzleSetSpec | null) ?? {
-    themes: ['fork', 'pin', 'hangingPiece', 'mateIn1'],
-    count: 10,
-    ratingOffset: 0,
-    mode: 'train-focus',
-  };
+  const spec = normaliseSpec(location.state);
   const [puzzle, setPuzzle] = useState<Puzzle | null>(null);
   const [results, setResults] = useState<boolean[]>([]);
   const [rating, setRating] = useState<number | null>(null);
