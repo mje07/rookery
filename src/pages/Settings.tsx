@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { GoalForm } from '../features/path/GoalForm';
+import { loadProfile, saveProfile, type Profile } from '../features/path/profile';
 import { db } from '../db/db';
 import { useSettings, type BoardTheme } from '../lib/settings';
 import { PageHeader } from '../components/ui';
@@ -13,6 +15,11 @@ const THEMES: { id: BoardTheme; label: string; light: string; dark: string }[] =
 export default function Settings() {
   const s = useSettings();
   const [msg, setMsg] = useState('');
+  const [profile, setProfile] = useState<Profile | null | undefined>(undefined);
+  const [goalMsg, setGoalMsg] = useState('');
+  useEffect(() => {
+    void loadProfile().then(setProfile);
+  }, []);
 
   const exportData = async () => {
     const dump: Record<string, unknown> = {};
@@ -70,6 +77,21 @@ export default function Settings() {
         <label className="btn-row" style={{ marginTop: 12 }}>
           <input type="checkbox" checked={s.sound} onChange={(e) => s.update({ sound: e.target.checked })} /> Move sounds
         </label>
+      </div>
+      <div className="panel">
+        <h3>Your level & goal</h3>
+        {profile !== undefined && (
+          <GoalForm
+            key={profile?.setAt ?? 0}
+            initial={profile ?? undefined}
+            submitLabel={profile ? 'Update plan' : 'Build my plan'}
+            onSubmit={async (start, goal) => {
+              setProfile(await saveProfile(start, goal));
+              setGoalMsg('Saved. Your roadmap on the Today page now covers this range.');
+            }}
+          />
+        )}
+        {goalMsg && <div className="muted small" style={{ marginTop: 8 }}>{goalMsg}</div>}
       </div>
       <div className="panel">
         <h3>Daily training</h3>

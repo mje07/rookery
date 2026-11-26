@@ -309,6 +309,19 @@ label.field { display: flex; flex-direction: column; gap: 6px; font-size: 0.86re
 .stat-label { color: var(--muted); font-size: 0.8rem; font-weight: 620; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
 .stat-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .spark { width: 100%; height: 54px; margin-top: 8px; }
+/* ============================================================ goal form */
+.goal-form { display: flex; flex-direction: column; gap: 20px; }
+.field-label { font-weight: 680; margin-bottom: 10px; }
+.preset-grid { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.preset {
+  display: flex; flex-direction: column; gap: 2px; text-align: left; padding: 10px 12px; border-radius: 10px; cursor: pointer;
+  border: 1px solid var(--line-strong); background: var(--surface-2); font: inherit; color: inherit; font-size: 0.82rem;
+}
+.preset b { font-size: 0.92rem; }
+.preset:hover { border-color: rgba(232, 169, 59, 0.5); }
+.preset.on { border-color: var(--accent); background: linear-gradient(180deg, rgba(232, 169, 59, 0.14), transparent), var(--surface-2); }
+label.field.inline input { max-width: 160px; }
+
 /* ============================================================ training plan */
 .plan-list, .req-list { display: flex; flex-direction: column; gap: 6px; }
 .plan-item, .req, .road-head {

@@ -29,20 +29,25 @@ npm run build:puzzles    # Lichess puzzle database (CC0, ~300 MB download) → p
 `build:puzzles` samples ~2,000 puzzles per 100-point rating band plus up to 1,000 per theme
 (`PER_BAND` / `PER_THEME` env vars change this).
 
-## The training pipeline (200 → 1000)
+## The training pipeline (your level → your goal)
 
-The **Today** page is the core of the app: a guided path built around what decides games below 1000.
+The **Today** page is the core of the app. On first run you pick your current level (or enter a rating) and a rough
+goal; the roadmap is the slice of the curriculum between the two. Change either any time (Today → Edit, or Settings).
 
-- **Roadmap: 8 stages**, each targeting one skill: rules & mate-in-1 → not hanging pieces (the blunder check) →
-  basic mates → forks → pins/skewers/discoveries → sound openings → converting & endgames → consistency.
+- **Curriculum: 15 stages from first moves to ~2200**, each targeting the skill that most often decides games at
+  that level: rules & mate-in-1 → the blunder check → basic mates → forks → pins/skewers/discoveries → sound
+  openings → converting & endgames → consistency (≈1000) → combinations → rook endgames → attack & defence →
+  quiet moves → deep calculation → expert technique → mastery (≈2200).
   Each stage has **measured gates** (lessons completed, themed puzzles solved at a set accuracy and rating, a bot
   beaten, average blunders per reviewed game, puzzle rating, Rush score) and completes as soon as you meet them, so
-  players who already know the basics move through quickly.
+  stages that are too easy for you clear in a session or two.
+- Your **starting puzzle rating is seeded from your stated level**, so the first sets aren't wildly too easy or hard.
 - **Daily plan** (20 / 40 / 60 min): warm-up puzzles → mistake review → next lesson → focus puzzles on the stage's
   themes → one slower game against the stage's bot → review of that game. Streaks count days with 3+ tasks done.
 - **Mistake trainer**: every mistake, miss and blunder from your reviewed games and every failed puzzle becomes a
   spaced-repetition card. Game positions accept any move the engine rates as close to best.
-- **Bot ladder** with small steps (~250, 400, 550, 700, 850, 1000, 1150 …) so there's always a winnable next opponent.
+- **Bot ladder** in small steps (~250, 400, 550, 700, 850, 1000, 1150, 1350, 1450, 1600, 1800, 2000, 2200, 2650,
+  max) so there's always a winnable next opponent.
 - **Strength estimate**: a rough figure from bots beaten, puzzle rating and roadmap progress. It is shown with "≈"
   because the bots and puzzle ratings are only approximately calibrated to online game ratings.
 

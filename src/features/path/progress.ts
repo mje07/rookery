@@ -3,7 +3,8 @@ import { DEFAULT_RATING, type Rating } from '../puzzles/glicko';
 import { BOTS } from '../play/bots';
 import { lessonById } from '../../content/lessons';
 import { THEME_NAMES } from '../puzzles/data';
-import { STAGES, type Requirement, type Stage } from './stages';
+import { pathStages, STAGES, type Requirement, type Stage } from './stages';
+import type { Profile } from './profile';
 
 export interface Snapshot {
   lessonsDone: Set<string>;
@@ -153,14 +154,15 @@ export interface StageStatus {
   progress: number;
 }
 
-export function evaluateStages(s: Snapshot): { stages: StageStatus[]; current: StageStatus } {
-  const stages = STAGES.map((stage, index) => {
+/** Evaluate the user's roadmap: the stages between their starting level and their goal. */
+export function evaluateStages(s: Snapshot, profile: Pick<Profile, 'start' | 'goal'>): { stages: StageStatus[]; current: StageStatus; complete: boolean } {
+  const stages = pathStages(profile.start, profile.goal).map((stage, index) => {
     const reqs = stage.requirements.map((r) => evaluate(r, s));
     const progress = reqs.reduce((a, r) => a + r.progress, 0) / reqs.length;
     return { stage, index, reqs, done: reqs.every((r) => r.done), progress };
   });
   const current = stages.find((st) => !st.done) ?? stages[stages.length - 1];
-  return { stages, current };
+  return { stages, current, complete: stages.every((st) => st.done) };
 }
 
 /**
@@ -168,7 +170,7 @@ export function evaluateStages(s: Snapshot): { stages: StageStatus[]; current: S
  * Signals: highest bot beaten (twice → full credit), puzzle rating (Lichess puzzle ratings run high
  * relative to beginner game ratings), and the roadmap stage reached.
  */
-export function estimateStrength(s: Snapshot, current: StageStatus): number {
+export function estimateStrength(s: Snapshot, current: StageStatus, profile: Pick<Profile, 'start'>): number {
   const signals: number[] = [];
   let botBest = 0;
   for (const b of BOTS) {
@@ -177,11 +179,14 @@ export function estimateStrength(s: Snapshot, current: StageStatus): number {
     else if (wins === 1) botBest = Math.max(botBest, b.rating - 100);
   }
   if (botBest) signals.push(botBest);
-  if (s.puzzleRating.rd < 150) signals.push(s.puzzleRating.r - 400);
-  const stageFloor = current.stage.from + (current.stage.to - current.stage.from) * current.progress;
+  if (s.puzzleRating.rd < 150) signals.push(s.puzzleRating.r - 350);
+  // Progress through the current stage, never below where the user said they started.
+  const stageFloor = Math.max(profile.start, current.stage.from + (current.stage.to - current.stage.from) * current.progress);
   signals.push(stageFloor);
   const avg = signals.reduce((a, b) => a + b, 0) / signals.length;
-  return Math.round(Math.max(200, Math.min(2000, avg)) / 25) * 25;
+  // Self-reported start is a floor until the evidence clearly says otherwise (puzzles and bots both well below).
+  const floor = profile.start - 100;
+  return Math.round(Math.max(100, floor, Math.min(2600, avg)) / 25) * 25;
 }
 
 export function themeLabel(themes: string[]) {

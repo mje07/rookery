@@ -25,9 +25,24 @@ page.on('request', (r) => { const u = new URL(r.url()); if (!['localhost', '127.
 const shot = (name) => page.screenshot({ path: join(out, `${name}.png`) });
 const steps = (process.env.STEPS ?? 'home,analysis,review').split(',');
 
+/** First run: fill in the level/goal form (Beginner → 1000 by default). */
+async function ensureProfile(level = 'Beginner', goal = '1000') {
+  await page.goto(`${base}/#/`);
+  await page.waitForSelector('.plan-item, .goal-form', { timeout: 15000 });
+  if (await page.locator('.goal-form').count()) {
+    await page.click(`.preset:has-text("${level}")`);
+    await page.locator('.goal-form input[aria-label="Goal rating"]').fill(goal);
+    await page.click('button:has-text("Build my plan")');
+    await page.waitForSelector('.plan-item', { timeout: 15000 });
+  }
+}
+
 if (steps.includes('home')) {
   await page.goto(`${base}/#/`);
-  await page.waitForTimeout(800);
+  await page.waitForSelector('.goal-form, .plan-item');
+  await shot('home-setup');
+  await ensureProfile();
+  await page.waitForTimeout(500);
   await shot('home');
 }
 
@@ -157,8 +172,7 @@ if (steps.includes('openings')) {
 
 if (steps.includes('train')) {
   // Today's plan → warm-up set (reveal solutions to move through quickly).
-  await page.goto(`${base}/#/`);
-  await page.waitForSelector('.plan-item');
+  await ensureProfile();
   await shot('train-plan');
   await page.click('.plan-item:has-text("Warm-up")');
   for (let i = 0; i < 12; i++) {
@@ -182,13 +196,14 @@ if (steps.includes('train')) {
   await page.selectOption('select >> nth=0', 'white');
   await page.click('button.btn.primary:has-text("Play ")');
   await page.waitForSelector('cg-board');
-  await clickMove('f2', 'f3');
+  // Two quick, slightly loose moves (they leave something to review without allowing a forced mate).
+  await clickMove('a2', 'a4');
   await page.waitForFunction(() => document.querySelectorAll('.move-list .mv').length >= 2, null, { timeout: 20000 });
-  await clickMove('g2', 'g4');
+  await clickMove('h2', 'h4');
   await page.waitForFunction(() => document.querySelectorAll('.move-list .mv').length >= 4, null, { timeout: 20000 });
-  await page.click('button:has-text("Resign")');
+  if (await page.locator('button:has-text("Resign")').count()) await page.click('button:has-text("Resign")');
   await page.click('button:has-text("Review this game")');
-  await page.waitForSelector('text=mistake trainer', { timeout: 90000 });
+  await page.waitForSelector('text=/mistake trainer|Clean game/', { timeout: 90000 });
   await shot('train-review');
 
   await page.goto(`${base}/#/`);
@@ -201,7 +216,19 @@ if (steps.includes('train')) {
   await shot('train-mistakes');
 }
 
-for (const s of steps.filter((x) => !['home', 'analysis', 'review', 'play', 'puzzles', 'lessons', 'openings', 'train'].includes(x))) {
+if (steps.includes('goal')) {
+  // A club player's roadmap: change the goal via the Edit form and check the range updates.
+  await ensureProfile();
+  await page.click('button:has-text("Edit")');
+  await page.click('.preset:has-text("Club")');
+  await page.locator('.goal-form input[aria-label="Goal rating"]').fill('1800');
+  await page.click('button:has-text("Update plan")');
+  await page.waitForSelector('text=1200 → 1800');
+  await page.waitForTimeout(400);
+  await shot('goal-club');
+}
+
+for (const s of steps.filter((x) => !['home', 'analysis', 'review', 'play', 'puzzles', 'lessons', 'openings', 'train', 'goal'].includes(x))) {
   await page.goto(`${base}/#/${s}`);
   await page.waitForTimeout(1500);
   await shot(s.replace(/\//g, '_'));

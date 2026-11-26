@@ -1,6 +1,7 @@
 /**
- * The 200 → 1000 roadmap. Each stage targets the skills that most often decide games at that level,
- * and every gate is measured from what the user actually does in the app.
+ * The full curriculum, from first moves to ~2200. A user's roadmap is the slice of stages between their current
+ * rating and their goal (see `pathStages`). Each stage targets the skills that most often decide games at that
+ * level, and every gate is measured from what the user actually does in the app.
  */
 
 export type Requirement =
@@ -27,11 +28,16 @@ export interface Stage {
   requirements: Requirement[];
 }
 
+export const MIN_RATING = 100;
+export const MAX_RATING = 2200;
+
+const TACTICS_MIX = ['fork', 'pin', 'skewer', 'discoveredAttack', 'mateIn2', 'mateIn3', 'hangingPiece', 'deflection', 'attraction'];
+
 export const STAGES: Stage[] = [
   {
     id: 'first-steps',
     title: 'First steps',
-    from: 200,
+    from: 100,
     to: 300,
     focus: 'Rules, checkmate, and finishing a game',
     why: 'You can’t win games you don’t know how to finish. Learn how the pieces move and how to deliver mate in one.',
@@ -157,7 +163,7 @@ export const STAGES: Stage[] = [
     from: 900,
     to: 1000,
     focus: 'Fewer blunders, faster pattern recognition',
-    why: 'At 1000 you rarely hang pieces and you punish opponents who do. This stage proves it.',
+    why: 'Around 1000 you rarely hang pieces and you punish opponents who do. This stage proves it.',
     themes: ['fork', 'pin', 'mateIn2', 'hangingPiece', 'discoveredAttack', 'skewer', 'mateIn3'],
     bot: 'cobalt',
     requirements: [
@@ -169,6 +175,129 @@ export const STAGES: Stage[] = [
       { kind: 'blunders', max: 1.2, games: 5 },
     ],
   },
+  {
+    id: 'combinations',
+    title: 'Combinations',
+    from: 1000,
+    to: 1150,
+    focus: 'Deflection, attraction and three-move mates',
+    why: 'Beyond single tactics, games are won by combining them: lure a piece, then strike.',
+    themes: ['deflection', 'attraction', 'mateIn3', 'sacrifice', 'capturingDefender'],
+    bot: 'otto',
+    requirements: [
+      { kind: 'puzzles', themes: ['deflection', 'attraction', 'mateIn3', 'sacrifice'], solved: 40, minRating: 1200, minAccuracy: 60, label: 'Combinations at 1200+' },
+      { kind: 'puzzleRating', min: 1500 },
+      { kind: 'beatBot', bot: 'otto', wins: 2 },
+      { kind: 'blunders', max: 1, games: 5 },
+    ],
+  },
+  {
+    id: 'rook-endgames',
+    title: 'Rook endgames',
+    from: 1150,
+    to: 1300,
+    focus: 'The winning bridge, the drawing defence, active rooks',
+    why: 'Rook endgames are the most common endgames. Knowing two key positions turns losses into draws and draws into wins.',
+    themes: ['rookEndgame', 'endgame', 'advancedPawn'],
+    bot: 'sable',
+    requirements: [
+      { kind: 'lesson', id: 'lucena' },
+      { kind: 'lesson', id: 'philidor' },
+      { kind: 'puzzles', themes: ['rookEndgame', 'endgame'], solved: 30, minRating: 1200, minAccuracy: 55, label: 'Endgames at 1200+' },
+      { kind: 'puzzleRating', min: 1600 },
+      { kind: 'beatBot', bot: 'sable', wins: 2 },
+    ],
+  },
+  {
+    id: 'attack-defence',
+    title: 'Attack & defence',
+    from: 1300,
+    to: 1450,
+    focus: 'Kingside attacks, defensive moves, in-between moves',
+    why: 'Stronger opponents don’t blunder outright. You have to create threats, and find the only defence when they do.',
+    themes: ['kingsideAttack', 'exposedKing', 'defensiveMove', 'intermezzo', 'clearance'],
+    bot: 'wren',
+    requirements: [
+      { kind: 'puzzles', themes: ['kingsideAttack', 'exposedKing', 'defensiveMove', 'intermezzo', 'clearance'], solved: 40, minRating: 1400, minAccuracy: 55, label: 'Attack & defence at 1400+' },
+      { kind: 'puzzleRating', min: 1700 },
+      { kind: 'rush', min: 20 },
+      { kind: 'beatBot', bot: 'wren', wins: 2 },
+    ],
+  },
+  {
+    id: 'quiet-moves',
+    title: 'Quiet moves & positional play',
+    from: 1450,
+    to: 1600,
+    focus: 'Quiet moves, zugzwang, trapped pieces, pawn structure',
+    why: 'The best move is often not a capture or a check. Learn to find the quiet move that wins.',
+    themes: ['quietMove', 'zugzwang', 'trappedPiece', 'xRayAttack', 'interference'],
+    bot: 'ember',
+    requirements: [
+      { kind: 'puzzles', themes: ['quietMove', 'zugzwang', 'trappedPiece', 'xRayAttack', 'interference'], solved: 40, minRating: 1550, minAccuracy: 55, label: 'Quiet moves at 1550+' },
+      { kind: 'puzzleRating', min: 1850 },
+      { kind: 'beatBot', bot: 'ember', wins: 2 },
+      { kind: 'blunders', max: 0.8, games: 5 },
+    ],
+  },
+  {
+    id: 'deep-calculation',
+    title: 'Deep calculation',
+    from: 1600,
+    to: 1800,
+    focus: 'Long forcing lines and sacrifices',
+    why: 'Calculating four or five moves deep, accurately, separates club players from strong club players.',
+    themes: ['long', 'veryLong', 'mateIn3', 'sacrifice', ...TACTICS_MIX],
+    bot: 'basil',
+    requirements: [
+      { kind: 'puzzles', themes: ['long', 'veryLong', 'mateIn3', 'sacrifice'], solved: 50, minRating: 1750, minAccuracy: 55, label: 'Long combinations at 1750+' },
+      { kind: 'puzzleRating', min: 2000 },
+      { kind: 'rush', min: 25 },
+      { kind: 'beatBot', bot: 'basil', wins: 2 },
+    ],
+  },
+  {
+    id: 'expert-technique',
+    title: 'Expert technique',
+    from: 1800,
+    to: 2000,
+    focus: 'Precise endgames and accurate defence under pressure',
+    why: 'At this level, games are decided by small mistakes. Clean technique and stubborn defence win points.',
+    themes: ['rookEndgame', 'queenEndgame', 'pawnEndgame', 'defensiveMove', 'veryLong', 'quietMove'],
+    bot: 'onyx',
+    requirements: [
+      { kind: 'puzzles', themes: ['rookEndgame', 'queenEndgame', 'pawnEndgame', 'bishopEndgame', 'knightEndgame', 'defensiveMove'], solved: 50, minRating: 1900, minAccuracy: 55, label: 'Technique at 1900+' },
+      { kind: 'puzzleRating', min: 2150 },
+      { kind: 'beatBot', bot: 'onyx', wins: 2 },
+      { kind: 'blunders', max: 0.5, games: 5 },
+    ],
+  },
+  {
+    id: 'mastery',
+    title: 'Mastery',
+    from: 2000,
+    to: 2200,
+    focus: 'Master-level patterns, speed and consistency',
+    why: 'Beat a 2200-strength opponent repeatedly and solve master-game puzzles quickly and reliably.',
+    themes: ['master', 'veryLong', 'quietMove', 'sacrifice', ...TACTICS_MIX],
+    bot: 'quill',
+    requirements: [
+      { kind: 'puzzles', themes: ['master', 'veryLong', 'quietMove', 'sacrifice', 'deflection'], solved: 60, minRating: 2100, minAccuracy: 55, label: 'Master puzzles at 2100+' },
+      { kind: 'puzzleRating', min: 2300 },
+      { kind: 'rush', min: 30 },
+      { kind: 'beatBot', bot: 'quill', wins: 2 },
+    ],
+  },
 ];
 
-export const GOAL_RATING = 1000;
+export function clampRating(r: number) {
+  return Math.max(MIN_RATING, Math.min(MAX_RATING, Math.round(r)));
+}
+
+/** Stages between the current rating and the goal (inclusive of the stage containing each end). */
+export function pathStages(start: number, goal: number): Stage[] {
+  const s = clampRating(start);
+  const g = Math.max(clampRating(goal), s + 50);
+  const out = STAGES.filter((st) => st.to > s && st.from < g);
+  return out.length ? out : [STAGES[STAGES.length - 1]];
+}

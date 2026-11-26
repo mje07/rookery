@@ -15,14 +15,18 @@ import {
   RotateCcw,
   ScanSearch,
   Swords,
+  Pencil,
   Target,
+  Trophy,
   type LucideIcon,
 } from 'lucide-react';
 import { db, today } from '../db/db';
 import { useSettings } from '../lib/settings';
 import { estimateStrength, evaluateStages, loadSnapshot, type ReqStatus, type StageStatus } from '../features/path/progress';
 import { buildPlan, DAILY_OPTIONS, streak, todaysBotGames, type Task, type TaskId } from '../features/path/daily';
-import { GOAL_RATING, STAGES } from '../features/path/stages';
+import { loadProfile, saveProfile, type Profile } from '../features/path/profile';
+import { GoalForm } from '../features/path/GoalForm';
+import { MAX_RATING } from '../features/path/stages';
 
 const TASK_ICON: Record<TaskId, LucideIcon> = {
   warmup: Flame,
@@ -34,8 +38,10 @@ const TASK_ICON: Record<TaskId, LucideIcon> = {
 };
 
 interface Data {
+  profile: Profile;
   stages: StageStatus[];
   current: StageStatus;
+  complete: boolean;
   strength: number;
   plan: Task[];
   streak: number;
@@ -49,12 +55,18 @@ export default function Home() {
   const { dailyMinutes, update, loaded } = useSettings();
   const [d, setD] = useState<Data | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  const [profile, setProfile] = useState<Profile | null | undefined>(undefined);
+  const [editing, setEditing] = useState(false);
 
   useEffect(() => {
-    if (!loaded) return;
+    void loadProfile().then(setProfile);
+  }, []);
+
+  useEffect(() => {
+    if (!loaded || !profile) return;
     void (async () => {
       const snapshot = await loadSnapshot();
-      const { stages, current } = evaluateStages(snapshot);
+      const { stages, current, complete } = evaluateStages(snapshot, profile);
       const [log, due, total, st] = await Promise.all([
         db.dailyLog.get(today()),
         db.mistakes.where('due').belowOrEqual(Date.now()).count(),
@@ -65,16 +77,56 @@ export default function Home() {
       const todaysGameReviewed = todays ? !!(await db.reviews.get(todays.id!)) : false;
       const plan = buildPlan({ snapshot, current, minutes: dailyMinutes, log, dueMistakes: due, todaysGameReviewed });
       const fresh = snapshot.attempts.length === 0 && snapshot.lessonsDone.size === 0 && snapshot.botGames.length === 0;
-      setD({ stages, current, strength: estimateStrength(snapshot, current), plan, streak: st, dueMistakes: due, totalMistakes: total, fresh });
+      setD({
+        profile,
+        stages,
+        current,
+        complete,
+        strength: estimateStrength(snapshot, current, profile),
+        plan,
+        streak: st,
+        dueMistakes: due,
+        totalMistakes: total,
+        fresh,
+      });
     })();
-  }, [dailyMinutes, loaded]);
+  }, [dailyMinutes, loaded, profile]);
 
+  const save = async (start: number, goal: number) => {
+    setProfile(await saveProfile(start, goal));
+    setEditing(false);
+    setD(null);
+  };
+
+  if (profile === undefined) return <div className="page-loading">Loading…</div>;
+  if (profile === null) {
+    return (
+      <div style={{ maxWidth: 860 }}>
+        <section className="hero-card" style={{ display: 'block' }}>
+          <div style={{ position: 'relative' }}>
+            <div className="stat-label">Welcome to Rookery</div>
+            <h1 style={{ margin: '2px 0 6px' }}>Let’s build your training plan</h1>
+            <p>
+              Tell us roughly where you are and where you want to get to. You’ll get a roadmap of stages for that range and a
+              daily plan of puzzles, lessons, games and reviews. Your mistakes become practice until they stick.
+            </p>
+          </div>
+          <span className="hero-art" aria-hidden>♞</span>
+        </section>
+        <section className="panel">
+          <GoalForm onSubmit={save} />
+        </section>
+      </div>
+    );
+  }
   if (!d) return <div className="page-loading">Loading your plan…</div>;
   const { current } = d;
   const doneCount = d.plan.filter((t) => t.done).length;
   const minutesLeft = d.plan.filter((t) => !t.done).reduce((a, t) => a + t.minutes, 0);
   const nextTask = d.plan.find((t) => !t.done);
-  const pct = Math.max(0, Math.min(100, ((d.strength - 200) / (GOAL_RATING - 200)) * 100));
+  const { start, goal } = d.profile;
+  const pct = Math.max(0, Math.min(100, ((d.strength - start) / (goal - start)) * 100));
+  const marks = [start, ...d.stages.slice(1).map((s) => s.stage.from).filter((r) => r > start && r < goal), goal];
   const go = (link: string, state?: unknown) => navigate(link, { state });
 
   return (
@@ -83,7 +135,12 @@ export default function Home() {
       <section className="hero-card" style={{ display: 'block' }}>
         <div className="stat-row" style={{ position: 'relative', flexWrap: 'wrap' }}>
           <div>
-            <div className="stat-label">Road to {GOAL_RATING} · Stage {current.index + 1} of {STAGES.length}</div>
+            <div className="stat-label">
+              {start} → {goal} · Stage {current.index + 1} of {d.stages.length}
+              <button className="btn ghost small" style={{ marginLeft: 8, padding: '1px 7px' }} onClick={() => setEditing((e) => !e)} title="Change your level or goal">
+                <Pencil size={13} /> Edit
+              </button>
+            </div>
             <h1 style={{ margin: '2px 0 6px' }}>{current.stage.title}</h1>
             <p>{current.stage.focus}</p>
           </div>
@@ -105,16 +162,40 @@ export default function Home() {
             <div style={{ width: `${pct}%` }} />
           </div>
           <div className="btn-row muted small" style={{ justifyContent: 'space-between', marginTop: 6 }}>
-            {STAGES.map((s, i) => (
-              <span key={s.id} style={{ color: i < current.index ? 'var(--accent-2)' : i === current.index ? 'var(--text)' : undefined, fontWeight: i === current.index ? 700 : 500 }}>
-                {s.from}
+            {marks.map((m, i) => (
+              <span key={i} style={{ color: d.strength >= m ? 'var(--accent-2)' : undefined, fontWeight: i === 0 || i === marks.length - 1 ? 700 : 500 }}>
+                {i === marks.length - 1 ? <><Trophy size={12} style={{ verticalAlign: -1 }} /> {m}</> : m}
               </span>
             ))}
-            <span>{GOAL_RATING}</span>
           </div>
         </div>
         <span className="hero-art" aria-hidden>♞</span>
       </section>
+
+      {editing && (
+        <section className="panel" style={{ marginBottom: 16 }}>
+          <h2>Change your level or goal</h2>
+          <p className="muted small" style={{ marginTop: 0 }}>Your progress is kept. The roadmap just covers a different range.</p>
+          <GoalForm initial={{ start, goal }} submitLabel="Update plan" onSubmit={save} onCancel={() => setEditing(false)} />
+        </section>
+      )}
+
+      {d.complete && (
+        <div className="feedback ok" style={{ marginBottom: 16 }}>
+          <Trophy size={20} />
+          <div>
+            <b>You’ve cleared every stage up to {goal}.</b> Keep the habit going, or set a new goal
+            {goal < MAX_RATING && (
+              <>
+                {' '}
+                <button className="btn small primary" style={{ marginLeft: 6 }} onClick={() => void save(Math.round(d.strength), Math.min(MAX_RATING, goal + 300))}>
+                  Aim for {Math.min(MAX_RATING, goal + 300)}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {d.fresh && (
         <div className="feedback info" style={{ marginBottom: 16, fontWeight: 450 }}>
@@ -122,8 +203,8 @@ export default function Home() {
           <div>
             <b>How this works.</b> Each day, do the plan below: puzzles to build pattern recognition, a short lesson, one slow
             game against a bot at your level, and a review of that game. Everything you get wrong comes back as practice
-            until it sticks. Each stage ends when you’ve shown the skill, not after a fixed time. If you already know
-            the basics, the early stages will go by quickly.
+            until it sticks. Each stage ends when you’ve shown the skill, not after a fixed time, so if a stage is too
+            easy you’ll clear it in a session or two.
           </div>
         </div>
       )}
