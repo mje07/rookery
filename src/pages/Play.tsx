@@ -4,11 +4,12 @@ import { Chess } from 'chess.js';
 import { Board, arrow } from '../components/Board';
 import { MoveList } from '../components/MoveList';
 import { botEngine, analysisEngine } from '../engine/EngineService';
-import { addMove, createTree, mainline, treeToPgn, type MoveTree } from '../chess/tree';
+import { addMove, createTree, mainline, pathTo, treeToPgn, type MoveTree } from '../chess/tree';
+import { loadBook, type OpeningBook } from '../features/openings/book';
 import { BOTS, botMove, TIME_CONTROLS, type Bot, type TimeControl } from '../features/play/bots';
 import { saveGame } from '../features/review/gameLibrary';
 import { playMoveSound } from '../lib/sound';
-import { PageHeader, PlayerStrip } from '../components/ui';
+import { NavBar, PageHeader, PlayerStrip } from '../components/ui';
 import { Flag, Handshake, Lightbulb, Swords, Undo2 } from 'lucide-react';
 import { markDone } from '../features/path/daily';
 
@@ -110,6 +111,43 @@ function Game({ setup, onExit }: { setup: Setup; onExit: () => void }) {
 
   const node = tree.nodes[currentId];
   const shown = tree.nodes[viewId ?? currentId];
+
+  // ---- browsing the game with ←/→ (Home/End): positions along the line to the current move
+  const line = useMemo(() => pathTo(tree, currentId), [tree, currentId]);
+  const viewIndex = Math.max(0, line.indexOf(viewId ?? currentId));
+  const stepTo = useCallback(
+    (i: number) => {
+      const j = Math.max(0, Math.min(line.length - 1, i));
+      setViewId(j === line.length - 1 ? null : line[j]);
+    },
+    [line],
+  );
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+      if (e.key === 'ArrowLeft') stepTo(viewIndex - 1);
+      else if (e.key === 'ArrowRight') stepTo(viewIndex + 1);
+      else if (e.key === 'Home' || e.key === 'ArrowUp') stepTo(0);
+      else if (e.key === 'End' || e.key === 'ArrowDown') stepTo(line.length - 1);
+      else return;
+      e.preventDefault();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [stepTo, viewIndex, line.length]);
+
+  // ---- opening name for the position being viewed (keeps the deepest named line, like most sites do)
+  const [book, setBook] = useState<OpeningBook | null>(null);
+  useEffect(() => {
+    void loadBook().then(setBook, () => setBook(null));
+  }, []);
+  const opening = useMemo(() => {
+    if (!book) return undefined;
+    let found: { eco: string; name: string } | undefined;
+    for (const id of line.slice(1, viewIndex + 1)) found = book.nameAt(tree.nodes[id].fen) ?? found;
+    return found;
+  }, [book, line, viewIndex, tree]);
   const turn: Side = node.fen.split(' ')[1] === 'w' ? 'white' : 'black';
 
   const finish = useCallback((score: string, reason: string) => {
@@ -269,7 +307,20 @@ function Game({ setup, onExit }: { setup: Setup; onExit: () => void }) {
             </div>
           </div>
         )}
+        <div className="panel opening-panel">
+          <div className="stat-label">Opening</div>
+          <div className="opening-name">
+            {opening ? (
+              <>
+                <span className="tag accent">{opening.eco}</span> {opening.name}
+              </>
+            ) : (
+              <span className="muted">{viewIndex === 0 ? 'Starting position' : 'Unnamed line'}</span>
+            )}
+          </div>
+        </div>
         <MoveList tree={mainlineTo(tree, currentId)} currentId={viewId ?? currentId} onSelect={(id) => setViewId(id === currentId ? null : id)} />
+        <NavBar onFirst={() => stepTo(0)} onPrev={() => stepTo(viewIndex - 1)} onNext={() => stepTo(viewIndex + 1)} onLast={() => stepTo(line.length - 1)} />
         {!result && (
           <div className="ctrl-bar">
             <button className="icon-btn" onClick={() => void getHint()} disabled={turn !== color}><Lightbulb size={17} /> Hint</button>
@@ -279,7 +330,7 @@ function Game({ setup, onExit }: { setup: Setup; onExit: () => void }) {
           </div>
         )}
         {viewId && (
-          <button className="btn" onClick={() => setViewId(null)}>Back to current position</button>
+          <button className="btn" onClick={() => setViewId(null)}>Back to current position (End)</button>
         )}
       </div>
     </div>

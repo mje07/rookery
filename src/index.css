@@ -239,6 +239,10 @@ label.field { display: flex; flex-direction: column; gap: 6px; font-size: 0.86re
 .engine-line .pv span { cursor: pointer; }
 .engine-line .pv span:hover { color: var(--text); }
 
+/* ============================================================ play */
+.opening-panel { padding: 12px 14px; }
+.opening-name { font-weight: 650; margin-top: 2px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
 /* ============================================================ review */
 .line-moves { line-height: 2; margin-top: 6px; font-size: 0.94rem; }
 .eval-graph { width: 100%; height: 96px; display: block; cursor: pointer; background: #23262d; border-radius: var(--radius); border: 1px solid var(--line); }

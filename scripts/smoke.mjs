@@ -242,6 +242,40 @@ if (steps.includes('train')) {
   await shot('train-mistakes');
 }
 
+if (steps.includes('playnav')) {
+  // Arrow keys browse the game while playing; the opening name follows the viewed position.
+  await page.goto(`${base}/#/play`);
+  await page.click('button.card:has-text("Apex")');
+  await page.selectOption('select >> nth=0', 'white');
+  await page.click('button:has-text("Play Apex")');
+  await page.waitForSelector('cg-board');
+  const opening = () => page.locator('.opening-name').innerText();
+  const plies = () => page.evaluate(() => document.querySelectorAll('.move-list .mv').length);
+  await clickMove('e2', 'e4');
+  await page.waitForFunction(() => document.querySelectorAll('.move-list .mv').length >= 2, null, { timeout: 30000 });
+  await clickMove('g1', 'f3');
+  await page.waitForFunction(() => document.querySelectorAll('.move-list .mv').length >= 4, null, { timeout: 30000 });
+  await page.waitForTimeout(400);
+  const atEnd = await opening();
+  const activeAtEnd = await page.locator('.move-list .mv.active').innerText();
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.press('ArrowLeft');
+  await page.waitForTimeout(300);
+  const back2 = await opening();
+  const activeBack2 = await page.locator('.move-list .mv.active').innerText();
+  await shot('playnav-back');
+  await page.keyboard.press('Home');
+  const atStart = await opening();
+  await page.keyboard.press('ArrowRight');
+  const afterOne = await opening();
+  await page.keyboard.press('End');
+  const activeEnd = await page.locator('.move-list .mv.active').innerText();
+  console.log(`playnav: ${await plies()} plies | end "${atEnd}" [${activeAtEnd}] | back2 "${back2}" [${activeBack2}] | start "${atStart}" | +1 "${afterOne}" | End -> [${activeEnd}]`);
+  if (activeBack2 === activeAtEnd) throw new Error('ArrowLeft did not move back');
+  if (activeEnd !== activeAtEnd) throw new Error('End did not return to the latest move');
+  await shot('playnav-end');
+}
+
 if (steps.includes('regress')) {
   // Regression: stage-goal puzzle links used to start a set with "NaN" remaining, which then broke the plan.
   await ensureProfile();
@@ -295,7 +329,7 @@ if (steps.includes('goal')) {
   await shot('goal-club');
 }
 
-for (const s of steps.filter((x) => !['home', 'analysis', 'review', 'play', 'puzzles', 'lessons', 'openings', 'train', 'goal', 'regress'].includes(x))) {
+for (const s of steps.filter((x) => !['home', 'analysis', 'review', 'play', 'puzzles', 'lessons', 'openings', 'train', 'goal', 'regress', 'playnav'].includes(x))) {
   await page.goto(`${base}/#/${s}`);
   await page.waitForTimeout(1500);
   await shot(s.replace(/\//g, '_'));
