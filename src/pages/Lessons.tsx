@@ -4,10 +4,12 @@ import { db, type LessonProgress } from '../db/db';
 import { CATEGORIES, LESSONS, lessonById } from '../content/lessons';
 import { LessonRunner } from '../features/lessons/LessonRunner';
 import { PageHeader } from '../components/ui';
-import { Check, Compass, Crown, GitBranch, GraduationCap, Hourglass, Zap, type LucideIcon } from 'lucide-react';
+import { markDone } from '../features/path/daily';
+import { Check, Compass, Crown, GitBranch, GraduationCap, Hourglass, ShieldCheck, Zap, type LucideIcon } from 'lucide-react';
 
 const CATEGORY_ICON: Record<string, LucideIcon> = {
   Basics: GraduationCap,
+  Habits: ShieldCheck,
   Tactics: Zap,
   'Checkmate patterns': Crown,
   Endgames: Hourglass,
@@ -38,6 +40,7 @@ export default function Lessons() {
         lesson={lesson}
         startAt={p && !p.completed ? p.completedSteps : 0}
         onProgress={(completedSteps, completed) => {
+          if (completed) void markDone('lesson');
           const prev = progress.get(lessonId);
           void db.lessonProgress.put({
             lessonId,
@@ -46,7 +49,7 @@ export default function Lessons() {
             updatedAt: Date.now(),
           });
         }}
-        onExit={() => navigate('/lessons')}
+        onExit={() => ((window.history.state?.idx ?? 0) > 0 ? navigate(-1) : navigate('/lessons'))}
       />
     );
   }

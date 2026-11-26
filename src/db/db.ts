@@ -11,6 +11,11 @@ export interface GameRecord {
   date: string;
   source: 'import' | 'bot';
   addedAt: number;
+  /** Bot games: which bot, and which side the user played. */
+  botId?: string;
+  userColor?: 'white' | 'black';
+  /** Set once the review's mistakes have been added to the mistake trainer. */
+  mistakesBanked?: boolean;
 }
 
 export interface ReviewRecord {
@@ -28,6 +33,7 @@ export interface PuzzleAttempt {
   rating: number;
   userRatingAfter: number;
   at: number;
+  themes?: string[];
 }
 
 export interface LessonProgress {
@@ -63,6 +69,40 @@ export interface RepCard {
   lapses: number;
 }
 
+/** A position the user got wrong (in their own game, or a failed puzzle), scheduled for re-solving. */
+export interface MistakeCard {
+  id?: number;
+  source: 'game' | 'puzzle';
+  /** Dedup key: "game:<gameId>:<ply>" or "puzzle:<puzzleId>". */
+  key: string;
+  /** Game cards: the position and the best move; any move the engine rates as close is accepted. */
+  fen?: string;
+  bestUci?: string;
+  bestSan?: string;
+  playedSan?: string;
+  lastUci?: string;
+  classification?: string;
+  explanation?: string;
+  /** Mover's win% before the move (to judge alternatives). */
+  winBefore?: number;
+  gameId?: number;
+  /** Puzzle cards: the full puzzle, replayed from the start. */
+  puzzle?: { id: string; fen: string; moves: string[]; rating: number; themes: string[] };
+  ease: number;
+  interval: number;
+  reps: number;
+  due: number;
+  lapses: number;
+  createdAt: number;
+}
+
+/** One row per calendar day of training. */
+export interface DailyLog {
+  date: string; // YYYY-MM-DD (local)
+  done: Record<string, boolean>;
+  minutes?: number;
+}
+
 export interface Setting {
   key: string;
   value: unknown;
@@ -75,6 +115,8 @@ class RookeryDB extends Dexie {
   lessonProgress!: EntityTable<LessonProgress, 'lessonId'>;
   repertoires!: EntityTable<Repertoire, 'id'>;
   repCards!: EntityTable<RepCard, 'id'>;
+  mistakes!: EntityTable<MistakeCard, 'id'>;
+  dailyLog!: EntityTable<DailyLog, 'date'>;
   settings!: EntityTable<Setting, 'key'>;
 
   constructor() {
@@ -88,6 +130,10 @@ class RookeryDB extends Dexie {
       repCards: '++id, repertoireId, due, [repertoireId+key+uci]',
       settings: 'key',
     });
+    this.version(2).stores({
+      mistakes: '++id, &key, due, source',
+      dailyLog: 'date',
+    });
   }
 }
 
@@ -100,4 +146,10 @@ export async function getSetting<T>(key: string, fallback: T): Promise<T> {
 
 export async function setSetting(key: string, value: unknown) {
   await db.settings.put({ key, value });
+}
+
+/** Local calendar date as YYYY-MM-DD. */
+export function today(d = new Date()): string {
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }

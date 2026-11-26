@@ -2,7 +2,11 @@ import { Chess } from 'chess.js';
 import { db, type GameRecord } from '../../db/db';
 
 /** Validate a single PGN and store it; returns the new game id. */
-export async function saveGame(pgn: string, source: GameRecord['source']): Promise<number> {
+export async function saveGame(
+  pgn: string,
+  source: GameRecord['source'],
+  extra: Pick<GameRecord, 'botId' | 'userColor'> = {},
+): Promise<number> {
   const chess = new Chess();
   chess.loadPgn(pgn); // throws on invalid PGN
   const h = chess.getHeaders() as Record<string, string>;
@@ -14,6 +18,7 @@ export async function saveGame(pgn: string, source: GameRecord['source']): Promi
     date: h.Date || '',
     source,
     addedAt: Date.now(),
+    ...extra,
   });
   return id as number;
 }

@@ -70,6 +70,22 @@ export async function themePuzzles(theme: string): Promise<Puzzle[]> {
   return load(`t-${theme}.json`);
 }
 
+/**
+ * Random puzzle from any of `themes`, as close to `rating` as available (widening ±150 → ±300 → any),
+ * never below `minRating`, skipping ids in `exclude`.
+ */
+export async function themedPuzzleNear(themes: string[], rating: number, exclude: Set<string>, minRating = 0): Promise<Puzzle> {
+  const lists = await Promise.all(themes.map((t) => themePuzzles(t).catch(() => [] as Puzzle[])));
+  const seen = new Set<string>();
+  const pool = lists.flat().filter((p) => !exclude.has(p.id) && p.rating >= minRating && !seen.has(p.id) && seen.add(p.id));
+  for (const width of [150, 300, 600]) {
+    const near = pool.filter((p) => Math.abs(p.rating - rating) <= width);
+    if (near.length) return near[Math.floor(Math.random() * near.length)];
+  }
+  if (pool.length) return pool.reduce((best, p) => (Math.abs(p.rating - rating) < Math.abs(best.rating - rating) ? p : best));
+  return puzzleNear(rating, exclude);
+}
+
 export const THEME_NAMES: Record<string, string> = {
   mateIn1: 'Mate in 1',
   mateIn2: 'Mate in 2',

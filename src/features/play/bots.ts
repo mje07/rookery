@@ -21,8 +21,11 @@ export interface Bot {
 
 export const BOTS: Bot[] = [
   { id: 'pip', name: 'Pip', rating: 250, avatar: '🐣', blurb: 'Just learned how the pieces move. Leaves things hanging.', depth: 1, multiPV: 8, randomness: 0.7, maxLoss: 900, options: { 'Skill Level': 0 } },
+  { id: 'bramble', name: 'Bramble', rating: 400, avatar: '🐭', blurb: 'Knows the rules, still drops pieces now and then.', depth: 1, multiPV: 6, randomness: 0.55, maxLoss: 700, options: { 'Skill Level': 0 } },
   { id: 'moss', name: 'Moss', rating: 550, avatar: '🐢', blurb: 'Slow and steady, but misses simple tactics.', depth: 2, multiPV: 6, randomness: 0.45, maxLoss: 500, options: { 'Skill Level': 0 } },
+  { id: 'fern', name: 'Fern', rating: 700, avatar: '🦎', blurb: 'Develops sensibly but misses forks and pins.', depth: 3, multiPV: 5, randomness: 0.37, maxLoss: 400, options: { 'Skill Level': 1 } },
   { id: 'juniper', name: 'Juniper', rating: 850, avatar: '🦊', blurb: 'Likes to attack, sometimes too early.', depth: 4, multiPV: 5, randomness: 0.3, maxLoss: 300, options: { 'Skill Level': 2 } },
+  { id: 'cobalt', name: 'Cobalt', rating: 1000, avatar: '🐺', blurb: 'Steady. Spots most one-move tactics against it.', depth: 5, multiPV: 4, randomness: 0.24, maxLoss: 240, options: { 'Skill Level': 3 } },
   { id: 'otto', name: 'Otto', rating: 1150, avatar: '🦉', blurb: 'Solid club player. Punishes loose pieces.', depth: 6, multiPV: 4, randomness: 0.18, maxLoss: 180, options: { 'Skill Level': 5 } },
   { id: 'wren', name: 'Wren', rating: 1450, avatar: '🐦', blurb: 'Plays principled openings and clean endgames.', movetime: 400, options: { UCI_LimitStrength: true, UCI_Elo: 1450 } },
   { id: 'basil', name: 'Basil', rating: 1800, avatar: '🐻', blurb: 'Tournament regular. Grinds small edges.', movetime: 600, options: { UCI_LimitStrength: true, UCI_Elo: 1800 } },

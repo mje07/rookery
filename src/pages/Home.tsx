@@ -1,153 +1,250 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { BookOpen, Bot, Flame, GitBranch, Puzzle, ScanSearch } from 'lucide-react';
-import { db, getSetting, type GameRecord } from '../db/db';
-import { DEFAULT_RATING, type Rating } from '../features/puzzles/glicko';
-import { LESSONS } from '../content/lessons';
-import { RatingSpark } from './Puzzles';
+import { useNavigate } from 'react-router-dom';
+import {
+  BookOpen,
+  Brain,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  Circle,
+  Clock,
+  Flame,
+  Lock,
+  Play,
+  Puzzle,
+  RotateCcw,
+  ScanSearch,
+  Swords,
+  Target,
+  type LucideIcon,
+} from 'lucide-react';
+import { db, today } from '../db/db';
+import { useSettings } from '../lib/settings';
+import { estimateStrength, evaluateStages, loadSnapshot, type ReqStatus, type StageStatus } from '../features/path/progress';
+import { buildPlan, DAILY_OPTIONS, streak, todaysBotGames, type Task, type TaskId } from '../features/path/daily';
+import { GOAL_RATING, STAGES } from '../features/path/stages';
 
-interface Stats {
-  rating: Rating;
-  trend: number[];
-  solvedToday: number;
-  lessonsDone: number;
-  nextLesson?: { id: string; title: string; category: string };
-  dueCards: number;
-  repertoires: number;
-  recent: (GameRecord & { acc?: { w: number; b: number } })[];
-  bestRush: number;
-}
+const TASK_ICON: Record<TaskId, LucideIcon> = {
+  warmup: Flame,
+  mistakes: RotateCcw,
+  lesson: BookOpen,
+  focus: Target,
+  game: Swords,
+  review: ScanSearch,
+};
 
-function greeting() {
-  const h = new Date().getHours();
-  return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+interface Data {
+  stages: StageStatus[];
+  current: StageStatus;
+  strength: number;
+  plan: Task[];
+  streak: number;
+  dueMistakes: number;
+  totalMistakes: number;
+  fresh: boolean;
 }
 
 export default function Home() {
   const navigate = useNavigate();
-  const [s, setS] = useState<Stats | null>(null);
-  useEffect(() => {
-    void (async () => {
-      const [rating, attempts, progress, cards, reps, games, bestRush] = await Promise.all([
-        getSetting('puzzleRating', DEFAULT_RATING),
-        db.puzzleAttempts.orderBy('at').reverse().limit(300).toArray(),
-        db.lessonProgress.toArray(),
-        db.repCards.where('due').belowOrEqual(Date.now()).count(),
-        db.repertoires.count(),
-        db.games.orderBy('addedAt').reverse().limit(5).toArray(),
-        getSetting('best-rush', 0),
-      ]);
-      const reviews = await db.reviews.bulkGet(games.map((g) => g.id!));
-      const startOfDay = new Date().setHours(0, 0, 0, 0);
-      const done = new Set(progress.filter((p) => p.completed).map((p) => p.lessonId));
-      const next = LESSONS.find((l) => !done.has(l.id));
-      setS({
-        rating,
-        trend: attempts.filter((a) => a.mode === 'rated').map((a) => a.userRatingAfter).reverse(),
-        solvedToday: attempts.filter((a) => a.at >= startOfDay && a.solved).length,
-        lessonsDone: done.size,
-        nextLesson: next && { id: next.id, title: next.title, category: next.category },
-        dueCards: cards,
-        repertoires: reps,
-        recent: games.map((g, i) => ({ ...g, acc: reviews[i]?.data.accuracy })),
-        bestRush,
-      });
-    })();
-  }, []);
+  const { dailyMinutes, update, loaded } = useSettings();
+  const [d, setD] = useState<Data | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
 
-  if (!s) return <div className="page-loading">Loading…</div>;
-  const lessonPct = (s.lessonsDone / LESSONS.length) * 100;
+  useEffect(() => {
+    if (!loaded) return;
+    void (async () => {
+      const snapshot = await loadSnapshot();
+      const { stages, current } = evaluateStages(snapshot);
+      const [log, due, total, st] = await Promise.all([
+        db.dailyLog.get(today()),
+        db.mistakes.where('due').belowOrEqual(Date.now()).count(),
+        db.mistakes.count(),
+        streak(),
+      ]);
+      const todays = todaysBotGames(snapshot)[0];
+      const todaysGameReviewed = todays ? !!(await db.reviews.get(todays.id!)) : false;
+      const plan = buildPlan({ snapshot, current, minutes: dailyMinutes, log, dueMistakes: due, todaysGameReviewed });
+      const fresh = snapshot.attempts.length === 0 && snapshot.lessonsDone.size === 0 && snapshot.botGames.length === 0;
+      setD({ stages, current, strength: estimateStrength(snapshot, current), plan, streak: st, dueMistakes: due, totalMistakes: total, fresh });
+    })();
+  }, [dailyMinutes, loaded]);
+
+  if (!d) return <div className="page-loading">Loading your plan…</div>;
+  const { current } = d;
+  const doneCount = d.plan.filter((t) => t.done).length;
+  const minutesLeft = d.plan.filter((t) => !t.done).reduce((a, t) => a + t.minutes, 0);
+  const nextTask = d.plan.find((t) => !t.done);
+  const pct = Math.max(0, Math.min(100, ((d.strength - 200) / (GOAL_RATING - 200)) * 100));
+  const go = (link: string, state?: unknown) => navigate(link, { state });
+
   return (
-    <div style={{ maxWidth: 1080 }}>
-      <section className="hero-card">
-        <div style={{ position: 'relative' }}>
-          <h1>{greeting()}.</h1>
-          <p>
-            {s.dueCards > 0
-              ? `You have ${s.dueCards} opening move${s.dueCards > 1 ? 's' : ''} to review today.`
-              : s.nextLesson
-                ? `Up next: “${s.nextLesson.title}”. Or warm up with a few puzzles.`
-                : 'Warm up with a few puzzles, then play a game and review it.'}
-          </p>
+    <div style={{ maxWidth: 1100 }}>
+      {/* ---------------------------------------------------------------- road to 1000 */}
+      <section className="hero-card" style={{ display: 'block' }}>
+        <div className="stat-row" style={{ position: 'relative', flexWrap: 'wrap' }}>
+          <div>
+            <div className="stat-label">Road to {GOAL_RATING} · Stage {current.index + 1} of {STAGES.length}</div>
+            <h1 style={{ margin: '2px 0 6px' }}>{current.stage.title}</h1>
+            <p>{current.stage.focus}</p>
+          </div>
+          <div className="btn-row" style={{ gap: 22, alignItems: 'flex-end' }}>
+            <div style={{ textAlign: 'right' }}>
+              <div className="stat-label" title="Rough estimate from bots beaten, puzzle rating and roadmap progress">Est. strength</div>
+              <div className="stat">≈ {d.strength}</div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div className="stat-label">Streak</div>
+              <div className="stat" style={{ color: d.streak ? 'var(--accent-2)' : undefined }}>
+                <Flame size={22} style={{ verticalAlign: -2 }} /> {d.streak}
+              </div>
+            </div>
+          </div>
         </div>
-        <div className="btn-row" style={{ position: 'relative' }}>
-          <button className="btn primary" onClick={() => navigate('/puzzles')}><Puzzle size={17} /> Solve puzzles</button>
-          <button className="btn" onClick={() => navigate('/review')}><ScanSearch size={17} /> Review a game</button>
+        <div style={{ position: 'relative', marginTop: 18 }}>
+          <div className="progress" style={{ height: 10 }}>
+            <div style={{ width: `${pct}%` }} />
+          </div>
+          <div className="btn-row muted small" style={{ justifyContent: 'space-between', marginTop: 6 }}>
+            {STAGES.map((s, i) => (
+              <span key={s.id} style={{ color: i < current.index ? 'var(--accent-2)' : i === current.index ? 'var(--text)' : undefined, fontWeight: i === current.index ? 700 : 500 }}>
+                {s.from}
+              </span>
+            ))}
+            <span>{GOAL_RATING}</span>
+          </div>
         </div>
         <span className="hero-art" aria-hidden>♞</span>
       </section>
 
-      <div className="grid">
-        <Link to="/puzzles" className="card">
-          <div className="stat-row">
-            <div>
-              <div className="stat-label">Puzzle rating</div>
-              <div className="stat">{Math.round(s.rating.r)}</div>
-            </div>
-            <span className="card-icon" style={{ margin: 0 }}><Puzzle size={19} /></span>
+      {d.fresh && (
+        <div className="feedback info" style={{ marginBottom: 16, fontWeight: 450 }}>
+          <Brain size={20} />
+          <div>
+            <b>How this works.</b> Each day, do the plan below: puzzles to build pattern recognition, a short lesson, one slow
+            game against a bot at your level, and a review of that game. Everything you get wrong comes back as practice
+            until it sticks. Each stage ends when you’ve shown the skill, not after a fixed time. If you already know
+            the basics, the early stages will go by quickly.
           </div>
-          <div className="muted small" style={{ marginTop: 4 }}>
-            {s.solvedToday} solved today · <Flame size={13} style={{ verticalAlign: -2 }} /> Rush best {s.bestRush}
-          </div>
-          {s.trend.length > 1 && <RatingSpark values={s.trend.slice(-60)} />}
-        </Link>
-        <Link to={s.nextLesson ? `/lessons/${s.nextLesson.id}` : '/lessons'} className="card">
-          <div className="stat-row">
-            <div>
-              <div className="stat-label">Lessons</div>
-              <div className="stat">
-                {s.lessonsDone}<span className="muted" style={{ fontSize: '1.1rem', fontWeight: 600 }}> / {LESSONS.length}</span>
-              </div>
-            </div>
-            <span className="card-icon" style={{ margin: 0 }}><BookOpen size={19} /></span>
-          </div>
-          <div className="progress" style={{ margin: '10px 0 8px' }}>
-            <div style={{ width: `${lessonPct}%` }} />
-          </div>
-          <div className="muted small">{s.nextLesson ? `Next: ${s.nextLesson.title}` : 'All lessons complete!'}</div>
-        </Link>
-        <Link to="/openings" className="card">
-          <div className="stat-row">
-            <div>
-              <div className="stat-label">Openings due</div>
-              <div className="stat" style={{ color: s.dueCards ? 'var(--accent-2)' : undefined }}>{s.dueCards}</div>
-            </div>
-            <span className="card-icon" style={{ margin: 0 }}><GitBranch size={19} /></span>
-          </div>
-          <div className="muted small" style={{ marginTop: 4 }}>
-            {s.repertoires ? `${s.repertoires} repertoire${s.repertoires > 1 ? 's' : ''}` : 'Build your first repertoire'}
-          </div>
-        </Link>
-        <Link to="/play" className="card">
-          <div className="stat-row">
-            <div>
-              <div className="stat-label">Play</div>
-              <div className="stat">9 bots</div>
-            </div>
-            <span className="card-icon" style={{ margin: 0 }}><Bot size={19} /></span>
-          </div>
-          <div className="muted small" style={{ marginTop: 4 }}>From total beginner to full engine strength.</div>
-        </Link>
-      </div>
-
-      <div className="section-title">Recent games</div>
-      {s.recent.length ? (
-        <div className="game-list">
-          {s.recent.map((g) => (
-            <div key={g.id} className="game-row" onClick={() => navigate(`/review/${g.id}`)}>
-              <span className="btn-row" style={{ gap: 10 }}>
-                <span className="result-pill">{g.result}</span>
-                <span><b>{g.white}</b> <span className="muted">vs</span> <b>{g.black}</b></span>
-              </span>
-              <span className="muted small">{g.acc ? `Accuracy ${g.acc.w.toFixed(1)} · ${g.acc.b.toFixed(1)}` : 'Not reviewed yet'}</span>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="empty">
-          No games yet. <Link to="/play">Play a bot</Link> or <Link to="/review">import a PGN</Link> to get your first review.
         </div>
       )}
+
+      <div className="board-layout" style={{ alignItems: 'stretch' }}>
+        {/* -------------------------------------------------------------- today's plan */}
+        <section className="panel" style={{ flex: '1 1 420px' }}>
+          <div className="panel-title">
+            <h2>Today’s plan</h2>
+            <div className="tabs" style={{ margin: 0, padding: 3 }}>
+              {DAILY_OPTIONS.map((m) => (
+                <button key={m} className={`tab ${dailyMinutes === m ? 'active' : ''}`} style={{ padding: '4px 10px' }} onClick={() => update({ dailyMinutes: m })}>
+                  {m}m
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="muted small" style={{ marginBottom: 12 }}>
+            {doneCount === d.plan.length ? 'All done for today. Great work!' : `${doneCount} of ${d.plan.length} done · about ${minutesLeft} min left`}
+          </div>
+          <div className="plan-list">
+            {d.plan.map((t) => {
+              const Icon = TASK_ICON[t.id];
+              const isNext = t === nextTask;
+              return (
+                <button key={t.id} className={`plan-item ${t.done ? 'done' : ''} ${isNext ? 'next' : ''}`} onClick={() => go(t.link, t.linkState)}>
+                  <span className="plan-check">{t.done ? <Check size={15} strokeWidth={3} /> : <Icon size={17} />}</span>
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span className="plan-title">{t.title}</span>
+                    <span className="plan-detail">{t.detail}</span>
+                  </span>
+                  <span className="plan-time"><Clock size={13} /> {t.minutes}m</span>
+                  {isNext ? <span className="btn primary small"><Play size={14} /> Start</span> : <ChevronRight size={17} className="muted" />}
+                </button>
+              );
+            })}
+          </div>
+          <div className="muted small" style={{ marginTop: 12 }}>
+            Mistake trainer: {d.dueMistakes} due · {d.totalMistakes} saved positions
+          </div>
+        </section>
+
+        {/* -------------------------------------------------------------- stage gates */}
+        <section className="panel" style={{ flex: '1 1 380px' }}>
+          <div className="panel-title">
+            <h2>Stage goals</h2>
+            <span className="tag accent">{Math.round(current.progress * 100)}%</span>
+          </div>
+          <p className="muted small" style={{ marginTop: 0 }}>{current.stage.why}</p>
+          <ReqList reqs={current.reqs} go={go} />
+        </section>
+      </div>
+
+      {/* ---------------------------------------------------------------- roadmap */}
+      <div className="section-title">Roadmap</div>
+      <div className="roadmap">
+        {d.stages.map((st) => {
+          const isCurrent = st === current;
+          const locked = st.index > current.index;
+          const expanded = open === st.stage.id;
+          return (
+            <div key={st.stage.id} className={`road-stage ${st.done ? 'done' : ''} ${isCurrent ? 'current' : ''} ${locked ? 'locked' : ''}`}>
+              <button className="road-head" onClick={() => setOpen(expanded ? null : st.stage.id)}>
+                <span className="road-dot">{st.done ? <Check size={15} strokeWidth={3} /> : locked ? <Lock size={13} /> : st.index + 1}</span>
+                <span style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+                  <span className="plan-title">{st.stage.title}</span>
+                  <span className="plan-detail">{st.stage.from}–{st.stage.to} · {st.stage.focus}</span>
+                </span>
+                <span className="road-bar"><span style={{ width: `${st.progress * 100}%` }} /></span>
+                {expanded ? <ChevronDown size={17} /> : <ChevronRight size={17} />}
+              </button>
+              {expanded && (
+                <div style={{ padding: '4px 14px 14px 52px' }}>
+                  <p className="muted small" style={{ marginTop: 0 }}>{st.stage.why}</p>
+                  <ReqList reqs={st.reqs} go={go} />
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="grid" style={{ marginTop: 18 }}>
+        <button className="card" style={{ textAlign: 'left', cursor: 'pointer' }} onClick={() => go('/train/mistakes', { limit: 20 })}>
+          <span className="card-icon"><RotateCcw size={18} /></span>
+          <div className="card-title">Mistake trainer</div>
+          <div className="muted small">{d.dueMistakes} due now. Re-solve positions you got wrong.</div>
+        </button>
+        <button className="card" style={{ textAlign: 'left', cursor: 'pointer' }} onClick={() => go('/puzzles/rush')}>
+          <span className="card-icon"><Puzzle size={18} /></span>
+          <div className="card-title">Puzzle Rush</div>
+          <div className="muted small">Three minutes, three strikes. Builds speed.</div>
+        </button>
+        <button className="card" style={{ textAlign: 'left', cursor: 'pointer' }} onClick={() => go('/review')}>
+          <span className="card-icon"><ScanSearch size={18} /></span>
+          <div className="card-title">Review an outside game</div>
+          <div className="muted small">Paste a PGN from any site. Your mistakes join the trainer.</div>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ReqList({ reqs, go }: { reqs: ReqStatus[]; go: (link: string, state?: unknown) => void }) {
+  return (
+    <div className="req-list">
+      {reqs.map((r, i) => (
+        <button key={i} className={`req ${r.done ? 'done' : ''}`} onClick={() => go(r.link, r.linkState)}>
+          <span className="req-icon">{r.done ? <Check size={14} strokeWidth={3} /> : <Circle size={12} />}</span>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <span className="plan-title">{r.label}</span>
+            <span className="plan-detail">{r.detail}</span>
+            {!r.done && r.progress > 0 && (
+              <span className="road-bar" style={{ display: 'block', width: '100%', marginTop: 6 }}>
+                <span style={{ width: `${r.progress * 100}%` }} />
+              </span>
+            )}
+          </span>
+          {!r.done && <ChevronRight size={16} className="muted" />}
+        </button>
+      ))}
     </div>
   );
 }

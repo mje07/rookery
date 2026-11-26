@@ -155,7 +155,53 @@ if (steps.includes('openings')) {
   await shot('rep-train');
 }
 
-for (const s of steps.filter((x) => !['home', 'analysis', 'review', 'play', 'puzzles', 'lessons', 'openings'].includes(x))) {
+if (steps.includes('train')) {
+  // Today's plan → warm-up set (reveal solutions to move through quickly).
+  await page.goto(`${base}/#/`);
+  await page.waitForSelector('.plan-item');
+  await shot('train-plan');
+  await page.click('.plan-item:has-text("Warm-up")');
+  for (let i = 0; i < 12; i++) {
+    const done = await page.locator('text=Set complete').count();
+    if (done) break;
+    await page.waitForSelector('button:has-text("Solution"), button:has-text("Next puzzle")', { timeout: 20000 });
+    if (await page.locator('button:has-text("Solution")').count()) await page.click('button:has-text("Solution")');
+    await page.waitForSelector('button:has-text("Next puzzle")', { timeout: 20000 });
+    if (i === 0) await shot('train-warmup');
+    await page.click('button:has-text("Next puzzle")');
+    await page.waitForTimeout(300);
+  }
+  await page.waitForSelector('text=Set complete', { timeout: 10000 });
+  await shot('train-warmup-done');
+
+  // The plan's game: preselected bot; play two moves then resign, review it.
+  await page.goto(`${base}/#/`);
+  await page.waitForSelector('.plan-item');
+  await page.locator('.plan-item', { has: page.locator('.plan-title', { hasText: /^Play / }) }).click();
+  await page.waitForSelector('.card.selected');
+  await page.selectOption('select >> nth=0', 'white');
+  await page.click('button.btn.primary:has-text("Play ")');
+  await page.waitForSelector('cg-board');
+  await clickMove('f2', 'f3');
+  await page.waitForFunction(() => document.querySelectorAll('.move-list .mv').length >= 2, null, { timeout: 20000 });
+  await clickMove('g2', 'g4');
+  await page.waitForFunction(() => document.querySelectorAll('.move-list .mv').length >= 4, null, { timeout: 20000 });
+  await page.click('button:has-text("Resign")');
+  await page.click('button:has-text("Review this game")');
+  await page.waitForSelector('text=mistake trainer', { timeout: 90000 });
+  await shot('train-review');
+
+  await page.goto(`${base}/#/`);
+  await page.waitForSelector('.plan-item');
+  await page.waitForTimeout(500);
+  await shot('train-plan-after');
+  await page.goto(`${base}/#/train/mistakes`);
+  await page.waitForSelector('text=Mistake trainer', { timeout: 20000 });
+  await page.waitForTimeout(800);
+  await shot('train-mistakes');
+}
+
+for (const s of steps.filter((x) => !['home', 'analysis', 'review', 'play', 'puzzles', 'lessons', 'openings', 'train'].includes(x))) {
   await page.goto(`${base}/#/${s}`);
   await page.waitForTimeout(1500);
   await shot(s.replace(/\//g, '_'));
@@ -163,3 +209,4 @@ for (const s of steps.filter((x) => !['home', 'analysis', 'review', 'play', 'puz
 
 console.log(errors.length ? `ERRORS:\n${errors.join('\n')}` : 'no page errors');
 await browser.close();
+

@@ -15,7 +15,9 @@ import { deleteGame, pgnSummary, saveGame } from '../features/review/gameLibrary
 import type { PlyReview, ReviewData } from '../features/review/types';
 import { useSettings } from '../lib/settings';
 import { NavBar, PageHeader, PlayerStrip } from '../components/ui';
-import { ArrowLeft, Microscope, RotateCcw, Trash2, Upload } from 'lucide-react';
+import { ArrowLeft, BookmarkPlus, Microscope, RotateCcw, Trash2, Upload } from 'lucide-react';
+import { bankGameMistakes } from '../features/mistakes/bank';
+import { markDone } from '../features/path/daily';
 import { playMoveSound } from '../lib/sound';
 
 export default function Review() {
@@ -170,6 +172,24 @@ function ReviewGame({ id }: { id: number }) {
   const [showBest, setShowBest] = useState(true);
   const [retry, setRetry] = useState<RetryState>(null);
   const runRef = useRef<AbortController | null>(null);
+  const [banked, setBanked] = useState<number | null>(null);
+
+  const bank = useCallback(
+    async (color: 'white' | 'black') => {
+      if (!review || !game?.id) return;
+      const n = await bankGameMistakes(game.id, review, color);
+      setBanked(n);
+      setGame((g) => (g ? { ...g, mistakesBanked: true, userColor: g.userColor ?? color } : g));
+    },
+    [review, game],
+  );
+
+  // Bot games: the user's side is known, so mistakes go to the trainer automatically.
+  useEffect(() => {
+    if (!review || !game?.id || game.source !== 'bot' || !game.userColor || game.mistakesBanked) return;
+    void bank(game.userColor);
+    if (game.addedAt >= new Date().setHours(0, 0, 0, 0)) void markDone('review');
+  }, [review, game, bank]);
 
   const tree = useMemo(() => (game ? treeFromPgn(game.pgn) : null), [game]);
   const positions = useMemo(() => (tree ? mainline(tree).map((n) => n.fen) : []), [tree]);
@@ -337,6 +357,23 @@ function ReviewGame({ id }: { id: number }) {
         {review && (
           <>
             <Summary review={review} white={game.white} black={game.black} />
+            {banked !== null && (
+              <div className="feedback ok">
+                <BookmarkPlus size={18} />
+                <span>{banked ? `${banked} of your mistakes were added to the mistake trainer.` : 'No mistakes to add. Clean game!'}</span>
+              </div>
+            )}
+            {banked === null && !game.mistakesBanked && game.source !== 'bot' && (
+              <div className="panel small">
+                <div className="btn-row" style={{ justifyContent: 'space-between' }}>
+                  <span className="muted">Practise your mistakes from this game. Which side were you?</span>
+                  <span className="btn-row">
+                    <button className="btn small" onClick={() => void bank('white')}>White</button>
+                    <button className="btn small" onClick={() => void bank('black')}>Black</button>
+                  </span>
+                </div>
+              </div>
+            )}
             <div className="panel">
               <CoachBox ply={ply} retry={retry} review={review} onRetry={startRetry} />
               <div className="btn-row" style={{ marginTop: 10 }}>

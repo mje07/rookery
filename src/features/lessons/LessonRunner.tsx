@@ -43,7 +43,7 @@ export function LessonRunner({ lesson, startAt = 0, onProgress, onExit }: Props)
         <h1>Lesson complete 🎉</h1>
         <p className="muted">{lesson.title}</p>
         <div className="btn-row">
-          <button className="btn primary" onClick={onExit}>Back to lessons</button>
+          <button className="btn primary" onClick={onExit}>Continue</button>
           <button className="btn" onClick={() => { setDone(false); goto(0); }}>Restart</button>
         </div>
       </div>

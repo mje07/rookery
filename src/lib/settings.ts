@@ -4,32 +4,37 @@ import { setSoundEnabled } from './sound';
 
 export type BoardTheme = 'slate' | 'wood' | 'green' | 'ice';
 
-interface SettingsState {
+interface Prefs {
   boardTheme: BoardTheme;
   sound: boolean;
   reviewDepth: number;
   showCoords: boolean;
-  loaded: boolean;
-  load: () => Promise<void>;
-  update: (patch: Partial<Pick<SettingsState, 'boardTheme' | 'sound' | 'reviewDepth' | 'showCoords'>>) => void;
+  /** Daily training budget in minutes (20 / 40 / 60). */
+  dailyMinutes: number;
 }
 
-const DEFAULTS = { boardTheme: 'slate' as BoardTheme, sound: true, reviewDepth: 14, showCoords: true };
+interface SettingsState extends Prefs {
+  loaded: boolean;
+  load: () => Promise<void>;
+  update: (patch: Partial<Prefs>) => void;
+}
+
+const DEFAULTS: Prefs = { boardTheme: 'slate', sound: true, reviewDepth: 14, showCoords: true, dailyMinutes: 40 };
 
 export const useSettings = create<SettingsState>((set, get) => ({
   ...DEFAULTS,
   loaded: false,
   load: async () => {
     if (get().loaded) return;
-    const saved = await getSetting('prefs', DEFAULTS);
+    const saved = await getSetting<Partial<Prefs>>('prefs', DEFAULTS);
     const merged = { ...DEFAULTS, ...saved };
     setSoundEnabled(merged.sound);
     set({ ...merged, loaded: true });
   },
   update: (patch) => {
     set(patch);
-    const { boardTheme, sound, reviewDepth, showCoords } = get();
+    const { boardTheme, sound, reviewDepth, showCoords, dailyMinutes } = get();
     setSoundEnabled(sound);
-    void setSetting('prefs', { boardTheme, sound, reviewDepth, showCoords });
+    void setSetting('prefs', { boardTheme, sound, reviewDepth, showCoords, dailyMinutes });
   },
 }));

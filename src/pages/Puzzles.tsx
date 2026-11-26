@@ -5,6 +5,7 @@ import { DEFAULT_RATING, updateRating, type Rating } from '../features/puzzles/g
 import { loadIndex, puzzleNear, themePuzzles, THEME_NAMES, type Puzzle, type PuzzleIndex } from '../features/puzzles/data';
 import { PuzzlePlayer, type PuzzleOutcome } from '../features/puzzles/PuzzlePlayer';
 import { PageHeader } from '../components/ui';
+import { recordAttempt } from '../features/puzzles/record';
 import { History as HistoryIcon, LayoutGrid, Shield, Target, Timer } from 'lucide-react';
 
 export default function Puzzles() {
@@ -90,7 +91,7 @@ function Rated() {
     setDelta(Math.round(updated.r) - Math.round(rating.r));
     setRating(updated);
     await setSetting('puzzleRating', updated);
-    await db.puzzleAttempts.add({ puzzleId: puzzle.id, mode: 'rated', solved: o === 'solved', rating: puzzle.rating, userRatingAfter: updated.r, at: Date.now() });
+    await recordAttempt(puzzle, 'rated', o === 'solved', updated.r);
   };
 
   if (error) return <DataError error={error} />;
@@ -172,7 +173,7 @@ function ThemeTrainer() {
       puzzle={puzzle}
       onResult={(o) => {
         setStats((s) => (o === 'solved' ? { ...s, solved: s.solved + 1 } : { ...s, failed: s.failed + 1 }));
-        void db.puzzleAttempts.add({ puzzleId: puzzle.id, mode: `theme:${theme}`, solved: o === 'solved', rating: puzzle.rating, userRatingAfter: 0, at: Date.now() });
+        void recordAttempt(puzzle, `theme:${theme}`, o === 'solved');
       }}
       onNext={() => void next()}
       sidebar={
@@ -256,7 +257,7 @@ function Streak({ mode }: { mode: 'rush' | 'survival' }) {
     const r = [...results, o === 'solved'];
     setResults(r);
     const s = r.filter(Boolean).length;
-    if (puzzle) void db.puzzleAttempts.add({ puzzleId: puzzle.id, mode, solved: o === 'solved', rating: puzzle.rating, userRatingAfter: 0, at: Date.now() });
+    if (puzzle) void recordAttempt(puzzle, mode, o === 'solved');
     if (r.filter((x) => !x).length >= 3) {
       void end(s);
       return;

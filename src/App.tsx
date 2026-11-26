@@ -12,6 +12,7 @@ const Puzzles = lazy(() => import('./pages/Puzzles'));
 const Lessons = lazy(() => import('./pages/Lessons'));
 const Openings = lazy(() => import('./pages/Openings'));
 const Settings = lazy(() => import('./pages/Settings'));
+const Train = lazy(() => import('./pages/Train'));
 
 interface NavEntry {
   to: string;
@@ -19,7 +20,7 @@ interface NavEntry {
   icon: LucideIcon;
 }
 const NAV: { group?: string; items: NavEntry[] }[] = [
-  { items: [{ to: '/', label: 'Home', icon: House }] },
+  { items: [{ to: '/', label: 'Today', icon: House }] },
   {
     group: 'Learn',
     items: [
@@ -76,6 +77,7 @@ export default function App() {
         <Suspense fallback={<div className="page-loading">Loading…</div>}>
           <Routes>
             <Route path="/" element={<Home />} />
+            <Route path="/train/:task" element={<Train />} />
             <Route path="/analysis" element={<Analysis />} />
             <Route path="/review" element={<Review />} />
             <Route path="/review/:gameId" element={<Review />} />

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Chess } from 'chess.js';
 import { Board, arrow } from '../components/Board';
 import { MoveList } from '../components/MoveList';
@@ -10,6 +10,7 @@ import { saveGame } from '../features/review/gameLibrary';
 import { playMoveSound } from '../lib/sound';
 import { PageHeader, PlayerStrip } from '../components/ui';
 import { Flag, Handshake, Lightbulb, Swords, Undo2 } from 'lucide-react';
+import { markDone } from '../features/path/daily';
 
 type Side = 'white' | 'black';
 interface Setup {
@@ -25,9 +26,11 @@ export default function Play() {
 }
 
 function Lobby({ onStart }: { onStart: (s: Setup) => void }) {
-  const [bot, setBot] = useState(BOTS[3]);
-  const [color, setColor] = useState<'white' | 'black' | 'random'>('white');
-  const [tc, setTc] = useState(TIME_CONTROLS[0]);
+  // The training plan can pre-select an opponent and clock.
+  const pre = (useLocation().state as { botId?: string; tc?: string } | null) ?? {};
+  const [bot, setBot] = useState(() => BOTS.find((b) => b.id === pre.botId) ?? BOTS[3]);
+  const [color, setColor] = useState<'white' | 'black' | 'random'>('random');
+  const [tc, setTc] = useState(() => TIME_CONTROLS.find((t) => t.id === pre.tc) ?? TIME_CONTROLS[0]);
   return (
     <div style={{ maxWidth: 980 }}>
       <PageHeader title="Play a bot" subtitle="Pick an opponent. When the game ends you can send it straight to Game Review." />
@@ -204,9 +207,26 @@ function Game({ setup, onExit }: { setup: Setup; onExit: () => void }) {
     return treeToPgn(line) + (treeToPgn(line).trim().endsWith(res) ? '' : ` ${res}`);
   };
 
+  // Every finished game is saved, so roadmap gates can count wins and reviews.
+  const [savedId, setSavedId] = useState<number | null>(null);
+  const saving = useRef<Promise<number | null> | null>(null);
+  useEffect(() => {
+    if (!result || saving.current) return;
+    if (node.ply < 2) {
+      saving.current = Promise.resolve(null);
+      return;
+    }
+    saving.current = saveGame(pgnWithResult(result.score), 'bot', { botId: bot.id, userColor: color }).then((id) => {
+      setSavedId(id);
+      void markDone('game');
+      return id;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result]);
+
   const review = async () => {
-    const id = await saveGame(pgnWithResult(result?.score ?? '*'), 'bot');
-    navigate(`/review/${id}`);
+    const id = savedId ?? (await saving.current);
+    if (id) navigate(`/review/${id}`);
   };
 
   const shapes = useMemo(() => (hint ? [arrow(hint, 'blue')] : []), [hint]);

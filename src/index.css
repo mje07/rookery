@@ -309,6 +309,35 @@ label.field { display: flex; flex-direction: column; gap: 6px; font-size: 0.86re
 .stat-label { color: var(--muted); font-size: 0.8rem; font-weight: 620; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
 .stat-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .spark { width: 100%; height: 54px; margin-top: 8px; }
+/* ============================================================ training plan */
+.plan-list, .req-list { display: flex; flex-direction: column; gap: 6px; }
+.plan-item, .req, .road-head {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; cursor: pointer;
+  padding: 11px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); font: inherit; color: inherit;
+  transition: border-color 0.15s, background 0.15s;
+}
+.plan-item:hover, .req:hover, .road-head:hover { border-color: rgba(232, 169, 59, 0.45); background: var(--surface-3); }
+.plan-item.next { border-color: rgba(232, 169, 59, 0.55); background: linear-gradient(90deg, rgba(232, 169, 59, 0.1), transparent 70%), var(--surface-2); }
+.plan-item.done, .req.done { opacity: 0.6; }
+.plan-item.done .plan-title, .req.done .plan-title { text-decoration: line-through; text-decoration-color: rgba(255, 255, 255, 0.3); }
+.plan-check, .req-icon { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; flex-shrink: 0; background: var(--surface-3); color: var(--accent-2); }
+.req-icon { width: 24px; height: 24px; border-radius: 99px; color: var(--faint); }
+.plan-item.done .plan-check, .req.done .req-icon { background: rgba(63, 174, 104, 0.2); color: #8fe0ab; }
+.plan-title { display: block; font-weight: 650; font-size: 0.94rem; }
+.plan-detail { display: block; font-size: 0.8rem; color: var(--muted); margin-top: 1px; }
+.plan-time { display: inline-flex; align-items: center; gap: 4px; font-size: 0.78rem; color: var(--muted); white-space: nowrap; }
+.roadmap { display: flex; flex-direction: column; gap: 6px; }
+.road-stage { border-radius: 12px; background: var(--surface); border: 1px solid var(--line); }
+.road-stage .road-head { border: none; background: transparent; padding: 12px 14px; }
+.road-stage.current { border-color: rgba(232, 169, 59, 0.5); box-shadow: 0 0 0 1px rgba(232, 169, 59, 0.15), var(--shadow); }
+.road-stage.locked { opacity: 0.7; }
+.road-dot { width: 26px; height: 26px; border-radius: 99px; display: grid; place-items: center; font-size: 0.8rem; font-weight: 800; background: var(--surface-3); color: var(--muted); flex-shrink: 0; }
+.road-stage.done .road-dot { background: rgba(63, 174, 104, 0.25); color: #8fe0ab; }
+.road-stage.current .road-dot { background: var(--accent); color: var(--accent-ink); }
+.road-bar { display: inline-block; width: 120px; height: 6px; border-radius: 99px; background: var(--surface-3); overflow: hidden; flex-shrink: 0; }
+.road-bar > span { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); border-radius: 99px; }
+.road-stage.done .road-bar > span { background: var(--good); }
+
 .tree-list { display: flex; flex-direction: column; gap: 3px; max-height: 420px; overflow-y: auto; }
 .tree-item { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 7px 11px; border-radius: 8px; background: var(--surface-2); cursor: pointer; font-size: 0.92rem; border: 1px solid transparent; }
 .tree-item:hover { background: var(--surface-3); border-color: var(--line-strong); }

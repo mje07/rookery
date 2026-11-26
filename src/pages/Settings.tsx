@@ -72,6 +72,19 @@ export default function Settings() {
         </label>
       </div>
       <div className="panel">
+        <h3>Daily training</h3>
+        <div className="tabs" style={{ marginBottom: 8 }}>
+          {[20, 40, 60].map((m) => (
+            <button key={m} className={`tab ${s.dailyMinutes === m ? 'active' : ''}`} onClick={() => s.update({ dailyMinutes: m })}>
+              {m} min
+            </button>
+          ))}
+        </div>
+        <div className="muted small">
+          How long today’s plan should take. More time means more puzzles and slower games, and faster progress.
+        </div>
+      </div>
+      <div className="panel">
         <h3>Game Review</h3>
         <label className="field" style={{ maxWidth: 320 }}>
           Engine depth: {s.reviewDepth}
