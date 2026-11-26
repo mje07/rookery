@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { db } from '../db/db';
 import { useSettings, type BoardTheme } from '../lib/settings';
+import { PageHeader } from '../components/ui';
 
 const THEMES: { id: BoardTheme; label: string; light: string; dark: string }[] = [
   { id: 'slate', label: 'Slate', light: '#c9d1db', dark: '#7189a3' },
@@ -50,7 +51,7 @@ export default function Settings() {
 
   return (
     <div style={{ maxWidth: 720, display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <h1>Settings</h1>
+      <PageHeader title="Settings" subtitle="Board appearance, analysis depth and your local data." />
       <div className="panel">
         <h3>Board</h3>
         <div className="btn-row">
@@ -89,7 +90,7 @@ export default function Settings() {
             Restore backup
             <input type="file" accept="application/json" hidden onChange={(e) => e.target.files?.[0] && void importData(e.target.files[0])} />
           </label>
-          <button className="btn" style={{ color: '#ff9a9a' }} onClick={() => void reset()}>Reset everything</button>
+          <button className="btn danger" onClick={() => void reset()}>Reset everything</button>
         </div>
         {msg && <div className="muted small" style={{ marginTop: 8 }}>{msg}</div>}
       </div>

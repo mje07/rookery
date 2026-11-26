@@ -1,6 +1,8 @@
-import { NavLink, Route, Routes } from 'react-router-dom';
-import { lazy, Suspense, useEffect } from 'react';
+import { NavLink, Route, Routes, useLocation } from 'react-router-dom';
+import { lazy, Suspense, useEffect, useState } from 'react';
+import { BookOpen, Bot, Castle, GitBranch, House, Microscope, Puzzle, ScanSearch, Settings as SettingsIcon, type LucideIcon } from 'lucide-react';
 import { useSettings } from './lib/settings';
+import { db } from './db/db';
 
 const Home = lazy(() => import('./pages/Home'));
 const Analysis = lazy(() => import('./pages/Analysis'));
@@ -11,34 +13,64 @@ const Lessons = lazy(() => import('./pages/Lessons'));
 const Openings = lazy(() => import('./pages/Openings'));
 const Settings = lazy(() => import('./pages/Settings'));
 
-const NAV = [
-  { to: '/', label: 'Home', icon: '⌂' },
-  { to: '/review', label: 'Game Review', icon: '◎' },
-  { to: '/puzzles', label: 'Puzzles', icon: '✦' },
-  { to: '/lessons', label: 'Lessons', icon: '❖' },
-  { to: '/openings', label: 'Openings', icon: '⌥' },
-  { to: '/play', label: 'Play Bots', icon: '♟' },
-  { to: '/analysis', label: 'Analysis', icon: '⚲' },
-  { to: '/settings', label: 'Settings', icon: '⚙' },
+interface NavEntry {
+  to: string;
+  label: string;
+  icon: LucideIcon;
+}
+const NAV: { group?: string; items: NavEntry[] }[] = [
+  { items: [{ to: '/', label: 'Home', icon: House }] },
+  {
+    group: 'Learn',
+    items: [
+      { to: '/review', label: 'Game Review', icon: ScanSearch },
+      { to: '/puzzles', label: 'Puzzles', icon: Puzzle },
+      { to: '/lessons', label: 'Lessons', icon: BookOpen },
+      { to: '/openings', label: 'Openings', icon: GitBranch },
+    ],
+  },
+  {
+    group: 'Play',
+    items: [
+      { to: '/play', label: 'Play Bots', icon: Bot },
+      { to: '/analysis', label: 'Analysis', icon: Microscope },
+    ],
+  },
+  { group: 'App', items: [{ to: '/settings', label: 'Settings', icon: SettingsIcon }] },
 ];
 
 export default function App() {
   const { boardTheme, load } = useSettings();
+  const location = useLocation();
+  const [due, setDue] = useState(0);
   useEffect(() => {
     void load();
   }, [load]);
+  // Refresh the "due openings" badge as the user moves around.
+  useEffect(() => {
+    void db.repCards.where('due').belowOrEqual(Date.now()).count().then(setDue);
+  }, [location.pathname]);
+
   return (
     <div className={`app board-${boardTheme}`}>
-      <nav className="sidebar">
+      <nav className="sidebar" aria-label="Main">
         <div className="brand">
-          <span className="brand-mark">♜</span> Rookery
+          <span className="brand-mark"><Castle size={18} strokeWidth={2.4} /></span>
+          <span className="brand-name">Rookery</span>
         </div>
-        {NAV.map((n) => (
-          <NavLink key={n.to} to={n.to} end={n.to === '/'} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-            <span className="nav-icon">{n.icon}</span>
-            <span className="nav-label">{n.label}</span>
-          </NavLink>
+        {NAV.map((section, i) => (
+          <div key={i}>
+            {section.group && <div className="nav-group">{section.group}</div>}
+            {section.items.map(({ to, label, icon: Icon }) => (
+              <NavLink key={to} to={to} end={to === '/'} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} title={label}>
+                <span className="nav-icon"><Icon size={18} strokeWidth={2} /></span>
+                <span className="nav-label">{label}</span>
+                {to === '/openings' && due > 0 && <span className="nav-badge">{due}</span>}
+              </NavLink>
+            ))}
+          </div>
         ))}
+        <div className="sidebar-foot">Runs offline · Stockfish 19</div>
       </nav>
       <main className="content">
         <Suspense fallback={<div className="page-loading">Loading…</div>}>

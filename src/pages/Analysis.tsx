@@ -9,6 +9,8 @@ import { useTreeNav } from '../lib/useTreeNav';
 import { useLiveEngine } from '../lib/useLiveEngine';
 import { addMove, createTree, deleteNode, promoteVariation, START_FEN, treeFromPgn, treeToPgn, type MoveTree } from '../chess/tree';
 import { loadBook, type OpeningName } from '../features/openings/book';
+import { NavBar } from '../components/ui';
+import { Copy, FilePlus2 } from 'lucide-react';
 
 /** Free analysis board: play moves, branch variations, live engine, PGN/FEN import & export. */
 export default function Analysis() {
@@ -83,14 +85,14 @@ export default function Analysis() {
       <div className="side-col">
         <div className="panel">
           <div className="btn-row" style={{ justifyContent: 'space-between' }}>
-            <h2 style={{ margin: 0 }}>Analysis</h2>
-            <label className="btn-row small">
+            <h2 style={{ margin: 0 }}>Analysis board</h2>
+            <label className="btn-row small muted">
               <input type="checkbox" checked={engineOn} onChange={(e) => setEngineOn(e.target.checked)} /> Engine
             </label>
           </div>
           {opening && (
-            <div className="muted small" style={{ marginTop: 6 }}>
-              {opening.eco} · {opening.name}
+            <div style={{ marginTop: 8 }}>
+              <span className="tag accent">{opening.eco} · {opening.name}</span>
             </div>
           )}
           {engineOn && (
@@ -112,22 +114,23 @@ export default function Analysis() {
             } else if (choice === 'p') setTree(promoteVariation(tree, id));
           }}
         />
-        <div className="btn-row">
-          <button className="btn" onClick={nav.first}>⏮</button>
-          <button className="btn" onClick={nav.back}>◀</button>
-          <button className="btn" onClick={nav.forward}>▶</button>
-          <button className="btn" onClick={nav.last}>⏭</button>
-          <button className="btn" onClick={() => setOrientation((o) => (o === 'white' ? 'black' : 'white'))}>Flip</button>
-          <button className="btn" onClick={() => reset(createTree())}>New</button>
-        </div>
+        <NavBar
+          onFirst={nav.first}
+          onPrev={nav.back}
+          onNext={nav.forward}
+          onLast={nav.last}
+          onFlip={() => setOrientation((o) => (o === 'white' ? 'black' : 'white'))}
+        >
+          <button className="icon-btn" title="New board" onClick={() => reset(createTree())}><FilePlus2 size={18} /></button>
+        </NavBar>
         <div className="panel">
           <h3>Import / export</h3>
           <textarea rows={4} placeholder="Paste a PGN or FEN" value={importText} onChange={(e) => setImportText(e.target.value)} />
           {error && <div className="error small">{error}</div>}
           <div className="btn-row" style={{ marginTop: 8 }}>
             <button className="btn primary" onClick={doImport}>Load</button>
-            <button className="btn" onClick={() => void navigator.clipboard.writeText(node.fen)}>Copy FEN</button>
-            <button className="btn" onClick={() => void navigator.clipboard.writeText(treeToPgn(tree))}>Copy PGN</button>
+            <button className="btn" onClick={() => void navigator.clipboard.writeText(node.fen)}><Copy size={15} /> FEN</button>
+            <button className="btn" onClick={() => void navigator.clipboard.writeText(treeToPgn(tree))}><Copy size={15} /> PGN</button>
           </div>
           <div className="muted small" style={{ marginTop: 8, wordBreak: 'break-all' }}>{node.fen}</div>
           <div className="muted small" style={{ marginTop: 4 }}>Right-click a move to delete or promote it. ←/→ to navigate.</div>

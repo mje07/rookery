@@ -4,20 +4,25 @@ import { db, getSetting, setSetting, type PuzzleAttempt } from '../db/db';
 import { DEFAULT_RATING, updateRating, type Rating } from '../features/puzzles/glicko';
 import { loadIndex, puzzleNear, themePuzzles, THEME_NAMES, type Puzzle, type PuzzleIndex } from '../features/puzzles/data';
 import { PuzzlePlayer, type PuzzleOutcome } from '../features/puzzles/PuzzlePlayer';
+import { PageHeader } from '../components/ui';
+import { History as HistoryIcon, LayoutGrid, Shield, Target, Timer } from 'lucide-react';
 
 export default function Puzzles() {
   return (
     <div>
+      <PageHeader title="Puzzles" subtitle="Tactics from real games, picked to match your level." />
       <div className="tabs">
-        {[
-          ['', 'Rated'],
-          ['themes', 'Themes'],
-          ['rush', 'Rush'],
-          ['survival', 'Survival'],
-          ['history', 'History'],
-        ].map(([to, label]) => (
-          <NavLink key={to} to={`/puzzles/${to}`} end className={({ isActive }) => `tab ${isActive ? 'active' : ''}`}>
-            {label}
+        {(
+          [
+            ['', 'Rated', Target],
+            ['themes', 'Themes', LayoutGrid],
+            ['rush', 'Rush', Timer],
+            ['survival', 'Survival', Shield],
+            ['history', 'History', HistoryIcon],
+          ] as const
+        ).map(([to, label, Icon]) => (
+          <NavLink key={to} to={to ? `/puzzles/${to}` : '/puzzles'} end={to === ''} className={({ isActive }) => `tab ${isActive ? 'active' : ''}`}>
+            <Icon size={15} /> {label}
           </NavLink>
         ))}
       </div>

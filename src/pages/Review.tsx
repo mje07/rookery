@@ -14,6 +14,8 @@ import { CLASS_META, KEY_CLASSES } from '../features/review/classMeta';
 import { deleteGame, pgnSummary, saveGame } from '../features/review/gameLibrary';
 import type { PlyReview, ReviewData } from '../features/review/types';
 import { useSettings } from '../lib/settings';
+import { NavBar, PageHeader, PlayerStrip } from '../components/ui';
+import { ArrowLeft, Microscope, RotateCcw, Trash2, Upload } from 'lucide-react';
 import { playMoveSound } from '../lib/sound';
 
 export default function Review() {
@@ -59,10 +61,10 @@ function ReviewHome() {
 
   return (
     <div style={{ maxWidth: 900 }}>
-      <h1>Game Review</h1>
-      <p className="muted">
-        Paste or upload a PGN. Every move is checked by Stockfish and graded, and the mistakes become practice positions.
-      </p>
+      <PageHeader
+        title="Game Review"
+        subtitle="Paste or upload a PGN. Stockfish checks and grades every move, and your mistakes become practice positions."
+      />
       <div className="panel">
         <textarea rows={8} placeholder={'[Event "..."]\n1. e4 e5 2. Nf3 ...'} value={text} onChange={(e) => setText(e.target.value)} />
         {error && <div className="error small">{error}</div>}
@@ -71,7 +73,7 @@ function ReviewHome() {
             Review
           </button>
           <label className="btn">
-            Upload .pgn
+            <Upload size={16} /> Upload .pgn
             <input
               type="file"
               accept=".pgn,text/plain"
@@ -112,14 +114,18 @@ function ReviewHome() {
             const r = reviewed.get(g.id!);
             return (
               <div key={g.id} className="game-row" onClick={() => navigate(`/review/${g.id}`)}>
-                <span>
-                  <b>{g.white}</b> vs <b>{g.black}</b> <span className="muted">· {g.result}{g.date ? ` · ${g.date}` : ''}</span>
-                  {g.source === 'bot' && <span className="tag" style={{ marginLeft: 8 }}>bot game</span>}
+                <span className="btn-row" style={{ gap: 10 }}>
+                  <span className="result-pill">{g.result}</span>
+                  <span>
+                    <b>{g.white}</b> <span className="muted">vs</span> <b>{g.black}</b>
+                    {g.date && <span className="muted small"> · {g.date}</span>}
+                  </span>
+                  {g.source === 'bot' && <span className="tag">bot game</span>}
                 </span>
                 <span className="btn-row">
                   {r ? (
                     <span className="small muted">
-                      {r.accuracy.w.toFixed(1)} / {r.accuracy.b.toFixed(1)}
+                      Accuracy {r.accuracy.w.toFixed(1)} · {r.accuracy.b.toFixed(1)}
                     </span>
                   ) : (
                     <span className="tag">not reviewed</span>
@@ -135,7 +141,7 @@ function ReviewHome() {
                       }
                     }}
                   >
-                    ✕
+                    <Trash2 size={15} />
                   </button>
                 </span>
               </div>
@@ -285,10 +291,11 @@ function ReviewGame({ id }: { id: number }) {
   return (
     <div className="board-layout">
       <div>
-        <div className="player-strip">
-          <span>{orientation === 'white' ? game.black : game.white}</span>
-          {review && <span className="muted small">{review.opening ? `${review.opening.eco} ${review.opening.name}` : ''}</span>}
-        </div>
+        <PlayerStrip
+          name={orientation === 'white' ? game.black : game.white}
+          color={orientation === 'white' ? 'black' : 'white'}
+          right={review?.opening && <span className="tag">{review.opening.eco} · {review.opening.name}</span>}
+        />
         <div className="board-col">
           <EvalBar score={evalScore} orientation={orientation} />
           <Board
@@ -301,16 +308,17 @@ function ReviewGame({ id }: { id: number }) {
             onMove={onRetryMove}
           />
         </div>
-        <div className="player-strip">
-          <span>{orientation === 'white' ? game.white : game.black}</span>
-          <span className="muted small">{game.result}</span>
-        </div>
+        <PlayerStrip
+          name={orientation === 'white' ? game.white : game.black}
+          color={orientation}
+          right={<span className="result-pill">{game.result}</span>}
+        />
       </div>
 
       <div className="side-col">
         {!review && (
           <div className="panel">
-            <h2>Analysing…</h2>
+            <h2>Analysing your game…</h2>
             {error ? (
               <div className="error">{error}</div>
             ) : (
@@ -362,15 +370,20 @@ function ReviewGame({ id }: { id: number }) {
           </>
         )}
 
+        <NavBar
+          onFirst={() => go(0)}
+          onPrev={() => go(index - 1)}
+          onNext={() => go(index + 1)}
+          onLast={() => go(total)}
+          onFlip={() => setOrientation((o) => (o === 'white' ? 'black' : 'white'))}
+        >
+          <button className="icon-btn" title="Open this position on the analysis board" onClick={() => navigate('/analysis', { state: { fen: positions[index] } })}>
+            <Microscope size={18} />
+          </button>
+        </NavBar>
         <div className="btn-row">
-          <button className="btn" onClick={() => go(0)}>⏮</button>
-          <button className="btn" onClick={() => go(index - 1)}>◀</button>
-          <button className="btn" onClick={() => go(index + 1)}>▶</button>
-          <button className="btn" onClick={() => go(total)}>⏭</button>
-          <button className="btn" onClick={() => setOrientation((o) => (o === 'white' ? 'black' : 'white'))}>Flip</button>
-          <button className="btn" onClick={() => navigate('/analysis', { state: { fen: positions[index] } })}>Analyse position</button>
-          {review && <button className="btn" onClick={() => void run(true)}>Re-run</button>}
-          <button className="btn ghost" onClick={() => navigate('/review')}>All games</button>
+          <button className="btn ghost small" onClick={() => navigate('/review')}><ArrowLeft size={15} /> All games</button>
+          {review && <button className="btn ghost small" onClick={() => void run(true)}><RotateCcw size={15} /> Re-run analysis</button>}
         </div>
       </div>
     </div>
@@ -378,38 +391,41 @@ function ReviewGame({ id }: { id: number }) {
 }
 
 function Summary({ review, white, black }: { review: ReviewData; white: string; black: string }) {
+  // The rating estimate is meaningless for very short games.
+  const showRating = review.plies.length >= 16;
   return (
-    <div className="panel">
-      <div className="review-summary">
-        <div className="hdr">{white}</div>
-        <div />
-        <div className="hdr" style={{ textAlign: 'right' }}>{black}</div>
-        <div className="acc-box white">{review.accuracy.w.toFixed(1)}</div>
-        <div className="center">Accuracy</div>
-        <div className="acc-box black">{review.accuracy.b.toFixed(1)}</div>
-        <div className="num">{review.rating.w}</div>
-        <div className="center" title="A rough estimate from accuracy alone">Game rating ≈</div>
-        <div className="num">{review.rating.b}</div>
+    <div className="panel review-summary">
+      <div className="acc-head">
+        <div className="acc-side">
+          <span className="acc-name" title={white}>{white}</span>
+          <span className="acc-box white">{review.accuracy.w.toFixed(1)}</span>
+          {showRating && <span className="acc-rating">Game rating ≈ <b>{review.rating.w}</b></span>}
+        </div>
+        <div className="acc-mid">Accuracy</div>
+        <div className="acc-side right">
+          <span className="acc-name" title={black}>{black}</span>
+          <span className="acc-box black">{review.accuracy.b.toFixed(1)}</span>
+          {showRating && <span className="acc-rating">Game rating ≈ <b>{review.rating.b}</b></span>}
+        </div>
+      </div>
+      <div className="class-table">
         {ALL_CLASSES.map((c) => {
           const m = CLASS_META[c];
+          const w = review.counts.w[c];
+          const b = review.counts.b[c];
+          const dim = !w && !b;
           return (
-            <Row key={c} w={review.counts.w[c]} b={review.counts.b[c]}>
-              <span className="class-dot" style={{ background: m.color }}>{m.glyph}</span> {m.label}
-            </Row>
+            <div key={c} style={{ display: 'contents' }}>
+              <div className={`num ${w ? '' : 'zero'}`}>{w}</div>
+              <div className="lbl" style={{ opacity: dim ? 0.45 : 1 }}>
+                <span className="class-dot" style={{ background: m.color }}>{m.glyph}</span> {m.label}
+              </div>
+              <div className={`num ${b ? '' : 'zero'}`}>{b}</div>
+            </div>
           );
         })}
       </div>
     </div>
-  );
-}
-
-function Row({ w, b, children }: { w: number; b: number; children: React.ReactNode }) {
-  return (
-    <>
-      <div className="num" style={{ color: w ? undefined : 'var(--muted)' }}>{w}</div>
-      <div className="center">{children}</div>
-      <div className="num" style={{ color: b ? undefined : 'var(--muted)' }}>{b}</div>
-    </>
   );
 }
 

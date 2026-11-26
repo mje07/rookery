@@ -8,6 +8,8 @@ import { addMove, createTree, mainline, treeToPgn, type MoveTree } from '../ches
 import { BOTS, botMove, TIME_CONTROLS, type Bot, type TimeControl } from '../features/play/bots';
 import { saveGame } from '../features/review/gameLibrary';
 import { playMoveSound } from '../lib/sound';
+import { PageHeader, PlayerStrip } from '../components/ui';
+import { Flag, Handshake, Lightbulb, Swords, Undo2 } from 'lucide-react';
 
 type Side = 'white' | 'black';
 interface Setup {
@@ -28,25 +30,24 @@ function Lobby({ onStart }: { onStart: (s: Setup) => void }) {
   const [tc, setTc] = useState(TIME_CONTROLS[0]);
   return (
     <div style={{ maxWidth: 980 }}>
-      <h1>Play a bot</h1>
-      <p className="muted">Pick an opponent. After the game you can send it straight to Game Review.</p>
+      <PageHeader title="Play a bot" subtitle="Pick an opponent. When the game ends you can send it straight to Game Review." />
       <div className="grid">
         {BOTS.map((b) => (
           <button
             key={b.id}
-            className="card"
-            style={{ textAlign: 'left', cursor: 'pointer', borderColor: b.id === bot.id ? 'var(--accent)' : undefined }}
+            className={`card ${b.id === bot.id ? 'selected' : ''}`}
+            style={{ textAlign: 'left', cursor: 'pointer' }}
             onClick={() => setBot(b)}
           >
-            <div style={{ fontSize: 34 }}>{b.avatar}</div>
-            <div style={{ fontWeight: 700 }}>
-              {b.name} <span className="tag">{b.id === 'apex' ? 'max' : `~${b.rating}`}</span>
+            <div className="bot-avatar">{b.avatar}</div>
+            <div className="card-title btn-row" style={{ justifyContent: 'space-between' }}>
+              {b.name} <span className={`tag ${b.id === bot.id ? 'accent' : ''}`}>{b.id === 'apex' ? 'max' : `~${b.rating}`}</span>
             </div>
             <div className="muted small">{b.blurb}</div>
           </button>
         ))}
       </div>
-      <div className="panel" style={{ marginTop: 16, display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+      <div className="panel" style={{ marginTop: 18, display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end', position: 'sticky', bottom: 16 }}>
         <label className="field" style={{ width: 200 }}>
           You play
           <select value={color} onChange={(e) => setColor(e.target.value as typeof color)}>
@@ -67,11 +68,15 @@ function Lobby({ onStart }: { onStart: (s: Setup) => void }) {
           className="btn primary"
           onClick={() => onStart({ nonce: Date.now(), bot, tc, color: color === 'random' ? (Math.random() < 0.5 ? 'white' : 'black') : color })}
         >
-          Play {bot.name}
+          <Swords size={17} /> Play {bot.name}
         </button>
       </div>
     </div>
   );
+}
+
+function Clock({ ms, running }: { ms: number; running: boolean }) {
+  return <span className={`clock ${running ? 'running' : ''} ${ms < 20000 ? 'low' : ''}`}>{fmtClock(ms)}</span>;
 }
 
 function fmtClock(ms: number) {
@@ -209,13 +214,13 @@ function Game({ setup, onExit }: { setup: Setup; onExit: () => void }) {
   return (
     <div className="board-layout">
       <div>
-        <div className="player-strip">
-          <span>
-            {bot.avatar} {bot.name} <span className="muted small">({bot.id === 'apex' ? 'max' : bot.rating})</span>
-            {thinking && <span className="muted small"> · thinking…</span>}
-          </span>
-          {tc.base > 0 && <span className="tag" style={{ fontSize: '1rem' }}>{fmtClock(live(opp))}</span>}
-        </div>
+        <PlayerStrip
+          name={bot.name}
+          color={opp}
+          avatar={bot.avatar}
+          meta={thinking ? 'thinking…' : bot.id === 'apex' ? 'full strength' : `~${bot.rating}`}
+          right={tc.base > 0 && <Clock ms={live(opp)} running={turn === opp && !result && node.ply > 0} />}
+        />
         <Board
           fen={shown.fen}
           orientation={color}
@@ -224,10 +229,12 @@ function Game({ setup, onExit }: { setup: Setup; onExit: () => void }) {
           lastMove={shown.uci}
           shapes={shapes}
         />
-        <div className="player-strip">
-          <span>You</span>
-          {tc.base > 0 && <span className="tag" style={{ fontSize: '1rem' }}>{fmtClock(live(color))}</span>}
-        </div>
+        <PlayerStrip
+          name="You"
+          color={color}
+          meta={`playing ${color}`}
+          right={tc.base > 0 && <Clock ms={live(color)} running={turn === color && !result && node.ply > 0} />}
+        />
       </div>
       <div className="side-col">
         {result && (
@@ -244,11 +251,11 @@ function Game({ setup, onExit }: { setup: Setup; onExit: () => void }) {
         )}
         <MoveList tree={mainlineTo(tree, currentId)} currentId={viewId ?? currentId} onSelect={(id) => setViewId(id === currentId ? null : id)} />
         {!result && (
-          <div className="btn-row">
-            <button className="btn" onClick={() => void getHint()} disabled={turn !== color}>Hint</button>
-            <button className="btn" onClick={takeback} disabled={node.ply < 2 && color === 'white'}>Takeback</button>
-            <button className="btn" onClick={() => finish('1/2-1/2', 'agreement')}>Offer draw</button>
-            <button className="btn" onClick={() => finish(color === 'white' ? '0-1' : '1-0', 'resignation')}>Resign</button>
+          <div className="ctrl-bar">
+            <button className="icon-btn" onClick={() => void getHint()} disabled={turn !== color}><Lightbulb size={17} /> Hint</button>
+            <button className="icon-btn" onClick={takeback} disabled={node.ply < 2 && color === 'white'}><Undo2 size={17} /> Takeback</button>
+            <button className="icon-btn" onClick={() => finish('1/2-1/2', 'agreement')}><Handshake size={17} /> Draw</button>
+            <button className="icon-btn" onClick={() => finish(color === 'white' ? '0-1' : '1-0', 'resignation')}><Flag size={17} /> Resign</button>
           </div>
         )}
         {viewId && (

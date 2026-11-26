@@ -10,13 +10,19 @@ import { deleteRepertoire, leafLines, saveRepertoire } from '../features/opening
 import { review as srsReview } from '../features/openings/sm2';
 import { useTreeNav } from '../lib/useTreeNav';
 import { playMoveSound } from '../lib/sound';
+import { PageHeader } from '../components/ui';
+import { BookMarked, ChevronLeft, ChevronRight, Compass, Trash2 } from 'lucide-react';
 
 export default function Openings() {
   return (
     <div>
+      <PageHeader
+        title="Openings"
+        subtitle="Build the lines you want to play, then drill them. Spaced repetition brings each move back just before you'd forget it."
+      />
       <div className="tabs">
-        <NavLink to="/openings" end className={({ isActive }) => `tab ${isActive ? 'active' : ''}`}>Repertoires</NavLink>
-        <NavLink to="/openings/explorer" className={({ isActive }) => `tab ${isActive ? 'active' : ''}`}>Explorer</NavLink>
+        <NavLink to="/openings" end className={({ isActive }) => `tab ${isActive ? 'active' : ''}`}><BookMarked size={15} /> Repertoires</NavLink>
+        <NavLink to="/openings/explorer" className={({ isActive }) => `tab ${isActive ? 'active' : ''}`}><Compass size={15} /> Explorer</NavLink>
       </div>
       <Routes>
         <Route index element={<RepertoireList />} />
@@ -88,16 +94,29 @@ function RepertoireList() {
 
   return (
     <div style={{ maxWidth: 900 }}>
-      <h1>Opening repertoires</h1>
-      <p className="muted">
-        Build the lines you want to play, then drill them. Spaced repetition brings back each move just before you'd forget it.
-      </p>
       <div className="grid">
         {reps.map((r) => (
           <div key={r.id} className="card">
-            <div style={{ fontWeight: 700 }}>
-              {r.name} <span className="tag">{r.color}</span>
+            <div className="stat-row">
+              <span className={`avatar ${r.color}`} style={{ marginBottom: 12 }}>{r.color === 'white' ? '♔' : '♚'}</span>
+              <span className="btn-row" style={{ gap: 4 }}>
+                {r.due > 0 && <span className="tag accent">{r.due} due</span>}
+                <button
+                  className="btn small ghost"
+                  title="Delete repertoire"
+                  aria-label="Delete repertoire"
+                  onClick={async () => {
+                    if (confirm(`Delete "${r.name}"?`)) {
+                      await deleteRepertoire(r.id!);
+                      void refresh();
+                    }
+                  }}
+                >
+                  <Trash2 size={15} />
+                </button>
+              </span>
             </div>
+            <div className="card-title">{r.name}</div>
             <div className="muted small" style={{ margin: '4px 0 10px' }}>
               {r.total} moves to know · <b style={{ color: r.due ? 'var(--accent)' : undefined }}>{r.due} due</b>
             </div>
@@ -105,17 +124,6 @@ function RepertoireList() {
               <button className="btn small primary" disabled={!r.due} onClick={() => navigate(`/openings/train/${r.id}/due`)}>Review due</button>
               <button className="btn small" disabled={!r.total} onClick={() => navigate(`/openings/train/${r.id}/drill`)}>Drill lines</button>
               <button className="btn small" onClick={() => navigate(`/openings/edit/${r.id}`)}>Edit</button>
-              <button
-                className="btn small ghost"
-                onClick={async () => {
-                  if (confirm(`Delete "${r.name}"?`)) {
-                    await deleteRepertoire(r.id!);
-                    void refresh();
-                  }
-                }}
-              >
-                ✕
-              </button>
             </div>
           </div>
         ))}
@@ -336,8 +344,8 @@ function RepEditor() {
           }}
         />
         <div className="btn-row">
-          <button className="btn" onClick={nav.back}>◀</button>
-          <button className="btn" onClick={nav.forward}>▶</button>
+          <button className="btn" onClick={nav.back} aria-label="Previous"><ChevronLeft size={17} /></button>
+          <button className="btn" onClick={nav.forward} aria-label="Next"><ChevronRight size={17} /></button>
           <button className="btn primary" onClick={() => void save()} disabled={!dirty}>Save</button>
           <button className="btn" onClick={() => navigate('/openings')}>Done</button>
           {msg && <span className="muted small">{msg}</span>}
